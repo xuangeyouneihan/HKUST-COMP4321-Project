@@ -143,7 +143,7 @@ def spider(start_url, max_pages):
                                 pass
                     except Exception:
                         pass
-                    if last_modified_date > existing_page.date:  # 链接已经在 visited 中但页面已被更改
+                    if last_modified_date > existing_page.date:  # 链接已经在 visited 中但页面已被更改，则创建新的 webpage 对象并加入队列
                         new_page = webpage(url=absolute_link, parent_links={current_page.url})
                         queue.append(new_page)
                     # 如果链接已经在 visited 中且页面未被更改，更新其 parent_links
