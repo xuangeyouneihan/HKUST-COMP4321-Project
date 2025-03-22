@@ -176,6 +176,9 @@ def indexer_check_database(database_file, start_url, start_page):
             if datetime.now(timezone.utc) - db_last_modified < timedelta(days=1):
                 # 数据库文件有效，返回集合和 start_page
                 return True
+            else:
+                # 数据库需要更新，只返回 False 不删除数据库
+                return False
 
     # 如果条件不满足，删除数据库文件
     os.remove(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
@@ -279,17 +282,27 @@ def spider(start_url, max_pages):
             response = requests.get(current_page.url, timeout=5)
             response.raise_for_status()  # 出错时抛出异常
 
-            # 获取最后修改日期并更新
-            if current_page.date != datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc):
-                last_modified = response.headers.get("Last-Modified")
-                last_modified_date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-                if last_modified:
-                    try:
-                        # 将 Last-Modified 转换为 datetime 对象
-                        last_modified_date = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
-                    except ValueError:
-                        pass
-                current_page.date = last_modified_date
+            # 获取 Last-Modified 字段
+            last_modified = response.headers.get("Last-Modified")
+            if last_modified:
+                try:
+                    # 将 Last-Modified 转换为 datetime 对象
+                    last_modified_date = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
+                    current_page.date = last_modified_date  # 更新为 Last-Modified 的值
+                except ValueError:
+                    # 如果 Last-Modified 不存在
+                    if current_page.date == datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc) or response.status_code != 304:
+                        # 将当前时间（UTC）作为日期
+                        current_page.date = datetime.now(timezone.utc)
+                    else:
+                        continue
+            else:
+                # 如果 Last-Modified 不存在
+                if current_page.date == datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc) or response.status_code != 304:
+                    # 将当前时间（UTC）作为日期
+                    current_page.date = datetime.now(timezone.utc)
+                else:
+                    continue
 
             # 使用 HTML 内容的长度计算网页大小
             html_content = response.content  # 获取网页的二进制内容
@@ -347,13 +360,21 @@ def spider(start_url, max_pages):
 
                         # 获取 Last-Modified 字段
                         last_modified = response.headers.get("Last-Modified")
-                        last_modified_date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
                         if last_modified:
                             try:
                                 # 将 Last-Modified 转换为 datetime 对象
                                 last_modified_date = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
                             except ValueError:
-                                pass
+                                # 如果 Last-Modified 不存在
+                                if last_modified_date == datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc) or response.status_code != 304:
+                                    # 将当前时间（UTC）作为日期
+                                    last_modified_date = datetime.now(timezone.utc)
+                        else:
+                            # 如果 Last-Modified 不存在
+                            if last_modified_date == datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc) or response.status_code != 304:
+                                # 将当前时间（UTC）作为日期
+                                last_modified_date = datetime.now(timezone.utc)
+
                     except Exception:
                         pass
                     if last_modified_date > existing_child_page.date:  # 链接已经在 visited 中但页面已被更改，则创建新的 webpage 对象并加入队列

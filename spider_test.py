@@ -104,8 +104,10 @@ with open((os.path.dirname(os.path.abspath(__file__)) + "/spider_result.txt"), "
         # 写入前 10 个关键词及其频率
         keywords_str = "; ".join(f"{key} {value}" for key, value in top_keywords)
         file.write(f"{keywords_str}\n")
-        # 写入子链接
-        for child_link in page.child_links:
+        # 写入子链接（限制最多写入 10 个）
+        for i, child_link in enumerate(page.child_links):
+            if i >= 10:  # 超过 10 个子链接时停止写入
+                break
             file.write(f"{child_link}\n")
         # 写入分隔符（仅当不是最后一个网页时）
         if index < total_pages - 1:
