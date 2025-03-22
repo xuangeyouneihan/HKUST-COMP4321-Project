@@ -12,21 +12,22 @@ from collections import defaultdict
 from math import log
 
 stopwords_path = os.path.dirname(os.path.abspath(__file__)) + "/stopwords.txt"
-database_path = os.path.dirname(os.path.abspath(__file__)) + "/webpages.db"
 
 # 网页
 class webpage:
     title = ""  # 网页标题
     url = ""  # 网页链接
     date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)  # 最后修改时间
+    size = 0
     body_keywords = {}  # 正文关键词及其频率
     parent_links = set()  # 父链接
     child_links = set()  # 子链接
 
-    def __init__(self, url="", title="", date=None, body_keywords=None, parent_links=None, child_links=None):
+    def __init__(self, url="", title="", date=None, size=0, body_keywords=None, parent_links=None, child_links=None):
         self.url = url
         self.title = title
         self.date = date if date else datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        self.size = size
         self.body_keywords = body_keywords if body_keywords else {}
         self.parent_links = parent_links if parent_links else set()
         self.child_links = child_links if child_links else set()
@@ -41,15 +42,16 @@ class webpage:
     def __hash__(self):
         return hash(self.url)
 
-def save_to_database(visited, start_url):
+def spider_save_to_database(database_file, visited, start_url):
     """
     Save all visited webpages to a SQLite database.
 
-    :param visited: A set of webpage objects.
-    :param start_url: The starting URL for the spider.
+    :param database_file: SQLite 数据库文件名。
+    :param visited: 一个 webpage 的集合。
+    :param start_url: 起始 URL。
     """
     # 连接到 SQLite 数据库（如果不存在则创建）
-    conn = sqlite3.connect(database_path)
+    conn = sqlite3.connect(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
     cursor = conn.cursor()
 
     # 创建表
@@ -58,6 +60,7 @@ def save_to_database(visited, start_url):
             url TEXT PRIMARY KEY,
             title TEXT,
             date TEXT,
+            size INTEGER,
             body_keywords TEXT,
             parent_links TEXT,
             child_links TEXT,
@@ -73,31 +76,31 @@ def save_to_database(visited, start_url):
         is_start = 1 if page.url == start_url else 0  # 标记是否为起始 URL
 
         cursor.execute('''
-            INSERT OR REPLACE INTO webpages (url, title, date, body_keywords, parent_links, child_links, is_start)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (page.url, page.title, page.date.isoformat(), body_keywords_str, parent_links_str, child_links_str, is_start))
+            INSERT OR REPLACE INTO webpages (url, title, date, size, body_keywords, parent_links, child_links, is_start)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (page.url, page.title, page.date.isoformat(), page.size, body_keywords_str, parent_links_str, child_links_str, is_start))
 
     # 提交更改并关闭连接
     conn.commit()
     conn.close()
 
-def read_webpages_db():
+def indexer_read_database(database_file):
     """
     读取 webpages.db 并返回网页集合和 is_start 为 1 的页面。
+    :param database_file: SQLite 数据库文件名。
     :return: 一个包含 webpage 对象的集合和 start_page 对象，或者 (None, None)。
     """
     # 检查数据库文件是否存在
-    if not os.path.exists(database_path):
-        print("数据库文件不存在。")
+    if not os.path.exists(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file):
         return None, None
 
     # 连接到 SQLite 数据库
-    conn = sqlite3.connect(database_path)
+    conn = sqlite3.connect(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
     cursor = conn.cursor()
 
     try:
         # 读取数据库中的所有记录
-        cursor.execute("SELECT url, title, date, parent_links, is_start FROM webpages")
+        cursor.execute("SELECT url, title, date, size, body_keywords, parent_links, child_links, is_start FROM webpages")
         rows = cursor.fetchall()
 
         # 转换为 webpage 对象集合
@@ -105,7 +108,7 @@ def read_webpages_db():
         start_page = None
 
         for row in rows:
-            url, title, date_str, body_keywords_str, parent_links_str, child_links_str, is_start = row
+            url, title, date_str, size, body_keywords_str, parent_links_str, child_links_str, is_start = row
 
             # 解析日期
             date = datetime.fromisoformat(date_str) if date_str else datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
@@ -126,6 +129,7 @@ def read_webpages_db():
                 url=url,
                 title=title,
                 date=date,
+                size=size,
                 body_keywords=body_keywords,
                 parent_links=parent_links,
                 child_links=child_links
@@ -138,19 +142,22 @@ def read_webpages_db():
 
         # 如果没有找到 is_start 为 1 的页面，返回 None
         if not start_page:
-            print("数据库中没有标记为 is_start 的页面。")
             return None, None
 
         return webpages, start_page
 
-    except Exception as e:
-        print(f"读取数据库时出错：{e}")
+    except Exception:
         return None, None
 
     finally:
         conn.close()
 
-def check_database(start_url, start_page):
+def indexer_check_database(database_file, start_url, start_page):
+    """
+    :param database_file: SQLite 数据库文件名。
+    :param start_url: 起始 URL。
+    :param start_url: 起始 webpage。
+    """
     # 比对 start_page 与 start_url
     if start_page.url == start_url:
         # 发送 HEAD 请求获取 start_url 的最后修改时间
@@ -162,35 +169,65 @@ def check_database(start_url, start_page):
                 start_url_last_modified = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
             else:
                 start_url_last_modified = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-        except Exception as e:
-            print(f"无法获取 start_url 的最后修改时间：{e}")
+        except Exception:
             # 如果 HEAD 请求失败，返回True
             return True
 
         # 检查 start_url 的最后修改时间是否新于 start_page
-        if start_url_last_modified <= start_page.date:
+        if start_url_last_modified > start_page.date:
             # 检查数据库文件的最后修改时间
-            db_last_modified = datetime.fromtimestamp(os.path.getmtime(database_path), tz=timezone.utc)
+            db_last_modified = datetime.fromtimestamp(os.path.getmtime(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file), tz=timezone.utc)
             if datetime.now(timezone.utc) - db_last_modified < timedelta(days=1):
                 # 数据库文件有效，返回集合和 start_page
                 return True
 
     # 如果条件不满足，删除数据库文件
-    print("数据库文件无效，删除数据库。")
-    os.remove(database_path)
+    os.remove(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
     return False
 
-def load_stopwords():
+def indexer_save_to_database(database_file, inverted_index):
+    """
+    将单个倒排索引存入指定的 SQLite 数据库文件。
+    :param database_file: SQLite 数据库文件名。
+    :param inverted_index: 倒排索引，格式为 {keyword: [{"url": url, "tf": tf, "tf-idf": tf-idf}, ...]}。
+    """
+    # 连接到 SQLite 数据库（如果不存在则创建）
+    conn = sqlite3.connect(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
+    cursor = conn.cursor()
+
+    # 创建表存储倒排索引
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS inverted_index (
+            keyword TEXT PRIMARY KEY,
+            postings TEXT
+        )
+    ''')
+
+    # 插入倒排索引
+    for keyword, postings in inverted_index.items():
+        # 将 postings 转换为字符串格式存储
+        postings_str = ",".join(
+            f"{posting['url']}:{posting['tf']}:{posting['tf-idf']:.4f}" for posting in postings
+        )
+        cursor.execute('''
+            INSERT OR REPLACE INTO inverted_index (keyword, postings)
+            VALUES (?, ?)
+        ''', (keyword, postings_str))
+
+    # 提交更改并关闭连接
+    conn.commit()
+    conn.close()
+
+def load_stopwords(stopwords_file):
     """
     从文件中加载停用词。
     :return: 停用词集合。
     """
     try:
-        with open(stopwords_path, "r", encoding="utf-8") as file:
+        with open(os.path.dirname(os.path.abspath(__file__)) + "/" + stopwords_file, "r", encoding="utf-8") as file:
             stopwords = set(line.strip() for line in file if line.strip())
         return stopwords
     except FileNotFoundError:
-        print(f"停用词文件 {stopwords_path} 未找到，使用空停用词列表。")
         return set()
 
 def extract_text_content(tree):
@@ -233,7 +270,7 @@ def spider(start_url, max_pages):
     :return: A set of visited webpage objects.
     """
     # 加载停用词
-    stopwords = load_stopwords()
+    stopwords = load_stopwords("stopwords.txt")
 
     visited = set()  # 访问过的网页对象集合
     queue = deque([webpage(url=start_url)])  # BFS 队列，初始化时只设置 URL
@@ -257,6 +294,11 @@ def spider(start_url, max_pages):
                     except ValueError:
                         pass
                 current_page.date = last_modified_date
+
+            # 获取网页大小
+            current_page.size = response.headers.get("Content-Length")
+            if not current_page.size:
+                current_page.size = 0
 
             # 检查当前页面是否已经被访问过
             existing_page = next((page for page in visited if page.url == current_page.url), None)
@@ -357,10 +399,10 @@ def spider(start_url, max_pages):
                                     queue.remove(queued_page)
                                 break
 
-            print(f"Crawled: {current_page.url}")
-        except Exception as e:
-            print(f"Failed to crawl {current_page.url}: {e}")
+        except Exception:
+            pass
 
+    spider_save_to_database("webpages.db", visited, start_url)
     return visited
 
 def indexer(start_url, max_pages):
@@ -372,22 +414,19 @@ def indexer(start_url, max_pages):
     :return: 包含正文关键词和标题关键词的倒排索引。
     """
     # 尝试从数据库读取数据
-    webpages, start_page = read_webpages_db(start_url)
+    webpages, start_page = indexer_read_database("webpages.db")
 
     # 数据库无效
-    if webpages is None or start_page is None or not check_database(start_url, start_page):
-        print("Invalid database, database outdated or the database does not exist. Calling spider()...")
+    if webpages is None or start_page is None or not indexer_check_database("webpages.db", start_url, start_page):
         # 调用 spider 函数进行爬取
         webpages = spider(start_url, max_pages)
         start_page = next((page for page in webpages if page.url == start_url), None)
-        # 保存爬取结果到数据库
-        save_to_database(webpages, start_url)
 
     # 初始化 PorterStemmer
     stemmer = PorterStemmer()
 
     # 加载停用词
-    stopwords = load_stopwords()
+    stopwords = load_stopwords("stopwords.txt")
 
     # 构建正文关键词倒排索引
     body_inverted_index = defaultdict(list)
@@ -430,6 +469,8 @@ def indexer(start_url, max_pages):
             tf = posting["tf"]
             posting["tf-idf"] = tf * idf  # 计算 TF-IDF 权重
 
+    indexer_save_to_database("body_inverted_index.db", body_inverted_index)
+    indexer_save_to_database("title_inverted_index.db", title_inverted_index)
     return body_inverted_index, title_inverted_index
 
 # Example usage
@@ -437,12 +478,10 @@ if __name__ == "__main__":
     # start_url = "https://www.cse.ust.hk/~kwtleung/COMP4321/testpage.htm"
     start_url = "https://comp4321-hkust.github.io/testpages/testpage.htm"
     max_pages = 30  # Replace with your desired maximum number of pages
-    crawled_pages = spider(start_url, max_pages)
+    # crawled_pages = spider(start_url, max_pages)
 
-    # 保存到 SQLite 数据库
-    save_to_database(crawled_pages, start_url)
-
-    # 打印爬取的网页信息
-    print(f"Total crawled pages: {len(crawled_pages)}")
-    for page in crawled_pages:
-        print(f"URL: {page.url}, Title: {page.title}, Parent Links: {page.parent_links}")
+    # # 打印爬取的网页信息
+    # print(f"Total crawled pages: {len(crawled_pages)}")
+    # for page in crawled_pages:
+    #     print(f"URL: {page.url}, Title: {page.title}, Parent Links: {page.parent_links}")
+    print(indexer(start_url, max_pages))
