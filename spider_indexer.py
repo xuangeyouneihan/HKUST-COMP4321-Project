@@ -9,6 +9,7 @@ from collections import Counter
 import os
 from nltk.stem import PorterStemmer
 from collections import defaultdict
+from math import log
 
 stopwords_path = os.path.dirname(os.path.abspath(__file__)) + "/stopwords.txt"
 database_path = os.path.dirname(os.path.abspath(__file__)) + "/webpages.db"
@@ -18,15 +19,15 @@ class webpage:
     title = ""  # 网页标题
     url = ""  # 网页链接
     date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)  # 最后修改时间
-    keywords = {}  # 关键字及其频率
+    body_keywords = {}  # 正文关键词及其频率
     parent_links = set()  # 父链接
     child_links = set()  # 子链接
 
-    def __init__(self, url="", title="", date=None, keywords=None, parent_links=None, child_links=None):
+    def __init__(self, url="", title="", date=None, body_keywords=None, parent_links=None, child_links=None):
         self.url = url
         self.title = title
         self.date = date if date else datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-        self.keywords = keywords if keywords else {}
+        self.body_keywords = body_keywords if body_keywords else {}
         self.parent_links = parent_links if parent_links else set()
         self.child_links = child_links if child_links else set()
 
@@ -57,7 +58,9 @@ def save_to_database(visited, start_url):
             url TEXT PRIMARY KEY,
             title TEXT,
             date TEXT,
+            body_keywords TEXT,
             parent_links TEXT,
+            child_links TEXT,
             is_start INTEGER
         )
     ''')
@@ -65,11 +68,14 @@ def save_to_database(visited, start_url):
     # 插入数据
     for page in visited:
         parent_links_str = ",".join(page.parent_links)  # 将父链接集合转换为字符串
+        child_links_str = ",".join(page.child_links)  # 将子链接集合转换为字符串
+        body_keywords_str = ",".join(f"{key}:{value}" for key, value in page.body_keywords.items())  # 将关键词及其频率转换为字符串
         is_start = 1 if page.url == start_url else 0  # 标记是否为起始 URL
+
         cursor.execute('''
-            INSERT OR REPLACE INTO webpages (url, title, date, parent_links, is_start)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (page.url, page.title, page.date.isoformat(), parent_links_str, is_start))
+            INSERT OR REPLACE INTO webpages (url, title, date, body_keywords, parent_links, child_links, is_start)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (page.url, page.title, page.date.isoformat(), body_keywords_str, parent_links_str, child_links_str, is_start))
 
     # 提交更改并关闭连接
     conn.commit()
@@ -99,11 +105,31 @@ def read_webpages_db():
         start_page = None
 
         for row in rows:
-            url, title, date_str, parent_links_str, is_start = row
-            date = datetime.fromisoformat(date_str) if date_str else datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-            parent_links = set(parent_links_str.split(",")) if parent_links_str else set()
+            url, title, date_str, body_keywords_str, parent_links_str, child_links_str, is_start = row
 
-            page = webpage(url=url, title=title, date=date, parent_links=parent_links)
+            # 解析日期
+            date = datetime.fromisoformat(date_str) if date_str else datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+            # 解析 body_keywords
+            body_keywords = {}
+            if body_keywords_str:
+                for item in body_keywords_str.split(","):
+                    key, value = item.split(":")
+                    body_keywords[key] = int(value)
+
+            # 解析 parent_links 和 child_links
+            parent_links = set(parent_links_str.split(",")) if parent_links_str else set()
+            child_links = set(child_links_str.split(",")) if child_links_str else set()
+
+            # 创建 webpage 对象
+            page = webpage(
+                url=url,
+                title=title,
+                date=date,
+                body_keywords=body_keywords,
+                parent_links=parent_links,
+                child_links=child_links
+            )
             webpages.add(page)
 
             # 标注 is_start 为 1 的页面
@@ -244,14 +270,14 @@ def spider(start_url, max_pages):
             # 解析 HTML
             tree = html.fromstring(response.content)
 
-            # 提取网页标题和正文内容
-            full_text = extract_text_content(tree)
+            # 提取网页正文内容
+            body_text = " ".join(tree.xpath('//body//text()[not(parent::script) and not(parent::style)]'))
 
             # 分词并移除停用词
-            words = tokenize_and_filter(full_text, stopwords)
+            words = tokenize_and_filter(body_text, stopwords)
 
-            # 统计词频并更新到 keywords
-            current_page.keywords = dict(Counter(words))
+            # 统计词频并更新到 body_keywords
+            current_page.body_keywords = dict(Counter(words))
 
             # 更新网页标题
             title = tree.xpath('//title/text()')
@@ -337,55 +363,13 @@ def spider(start_url, max_pages):
 
     return visited
 
-# def indexer(start_url, max_pages, phrase):
-#     """
-#     从 phrase 中移除停用词，并尝试从数据库读取数据。
-#     如果数据库不存在或无效，则调用 spider 函数进行爬取。
-#     :param start_url: 起始 URL。
-#     :param max_pages: 最大爬取页面数。
-#     :param phrase: 输入的短语字符串。
-#     :return: 移除停用词后的单词列表。
-#     """
-#     # 加载停用词
-#     stopwords = load_stopwords()
-
-#     # 分词并移除停用词
-#     words = re.findall(r'\b\w+\b', phrase.lower())  # 使用正则表达式分词
-#     filtered_words = [word for word in words if word not in stopwords]
-
-#     # 尝试从数据库读取数据
-#     webpages, start_page = read_webpages_db(start_url)
-
-#     # 数据库无效
-#     if webpages is None or start_page is None or not check_database(start_url, start_page):
-#         print("Invalid database, database outdated or the database does not exist. Calling spider()...")
-#         # 调用 spider 函数进行爬取
-#         webpages = spider(start_url, max_pages)
-#         start_page = next((page for page in webpages if page.url == start_url), None)
-#         # 保存爬取结果到数据库
-#         save_to_database(webpages, start_url)
-
-#     # 初始化 PorterStemmer
-#     stemmer = PorterStemmer()
-
-#     # 对 filtered_words 进行 Porter Stemming
-#     stemmed_filtered_words = [stemmer.stem(word) for word in filtered_words]
-
-#     # 对 webpages 中的每个 webpage 的 keywords 进行 Porter Stemming
-#     for page in webpages:
-#         stemmed_keywords = {stemmer.stem(word): freq for word, freq in page.keywords.items()}
-#         page.keywords = stemmed_keywords  # 将处理后的关键词写回 keywords 属性
-
-#     return filtered_words
-
 def indexer(start_url, max_pages):
     """
     尝试从数据库读取数据或调用 spider 爬取网页，
-    并基于单词和动态生成的短语构建倒排索引。
+    并基于正文关键词和标题关键词构建倒排索引。
     :param start_url: 起始 URL。
     :param max_pages: 最大爬取页面数。
-    :param phrase: 输入的短语字符串。
-    :return: 倒排索引。
+    :return: 包含正文关键词和标题关键词的倒排索引。
     """
     # 尝试从数据库读取数据
     webpages, start_page = read_webpages_db(start_url)
@@ -402,30 +386,51 @@ def indexer(start_url, max_pages):
     # 初始化 PorterStemmer
     stemmer = PorterStemmer()
 
-    # 对 webpages 中的每个 webpage 的 keywords 进行 Porter Stemming
+    # 加载停用词
+    stopwords = load_stopwords()
+
+    # 构建正文关键词倒排索引
+    body_inverted_index = defaultdict(list)
+    body_document_frequencies = defaultdict(int)  # 用于存储每个正文词干的文档频率（DF）
+
+    # 构建标题关键词倒排索引
+    title_inverted_index = defaultdict(list)
+    title_document_frequencies = defaultdict(int)  # 用于存储每个标题词干的文档频率（DF）
+
+    total_documents = len(webpages)  # 文档总数
+
+    # 遍历每个网页，填充正文和标题的倒排索引
     for page in webpages:
-        stemmed_keywords = {stemmer.stem(word): freq for word, freq in page.keywords.items()}
-        page.keywords = stemmed_keywords  # 将处理后的关键词写回 keywords 属性
+        # 处理正文关键词
+        for keyword, tf in page.body_keywords.items():
+            stemmed_keyword = stemmer.stem(keyword)
+            body_inverted_index[stemmed_keyword].append({"url": page.url, "tf": tf})
+            body_document_frequencies[stemmed_keyword] += 1
 
-    # 构建倒排索引（支持单词和动态生成的短语）
-    inverted_index = defaultdict(list)
+        # 处理标题关键词
+        title_words = tokenize_and_filter(page.title, stopwords)  # 分词并移除停用词
+        title_keywords = Counter(stemmer.stem(word) for word in title_words)  # 统计词频并词干化
+        for keyword, tf in title_keywords.items():
+            title_inverted_index[keyword].append({"url": page.url, "tf": tf})
+            title_document_frequencies[keyword] += 1
 
-    for page in webpages:
-        # 单词索引
-        for keyword in page.keywords:
-            inverted_index[keyword].append(page.url)
+    # 计算正文关键词的 TF-IDF 权重并更新倒排索引
+    for keyword, postings in body_inverted_index.items():
+        df = body_document_frequencies[keyword]  # 文档频率
+        idf = log(total_documents / (1 + df))  # 计算 IDF，避免除以 0
+        for posting in postings:
+            tf = posting["tf"]
+            posting["tf-idf"] = tf * idf  # 计算 TF-IDF 权重
 
-        # 动态生成短语索引
-        content = list(page.keywords.keys())  # 获取关键词列表
-        for i in range(len(content) - 1):
-            phrase = f"{content[i]} {content[i + 1]}"
-            inverted_index[phrase].append(page.url)
+    # 计算标题关键词的 TF-IDF 权重并更新倒排索引
+    for keyword, postings in title_inverted_index.items():
+        df = title_document_frequencies[keyword]  # 文档频率
+        idf = log(total_documents / (1 + df))  # 计算 IDF，避免除以 0
+        for posting in postings:
+            tf = posting["tf"]
+            posting["tf-idf"] = tf * idf  # 计算 TF-IDF 权重
 
-    # 去重：确保每个 URL 在倒排索引中只出现一次
-    for key in inverted_index:
-        inverted_index[key] = list(set(inverted_index[key]))
-
-    return inverted_index
+    return body_inverted_index, title_inverted_index
 
 # Example usage
 if __name__ == "__main__":
