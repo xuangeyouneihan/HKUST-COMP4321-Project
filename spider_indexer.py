@@ -4,6 +4,8 @@ from collections import deque
 from urllib.parse import urljoin  # 用于处理相对链接
 from datetime import datetime, timezone
 import sqlite3
+import re
+from collections import Counter
 
 # 网页
 class webpage:
@@ -67,6 +69,144 @@ def save_to_database(visited, start_url):
     conn.commit()
     conn.close()
 
+# def spider(start_url, max_pages):
+#     """
+#     A simple web spider that crawls pages using BFS.
+
+#     :param start_url: The starting URL for the spider.
+#     :param max_pages: The maximum number of pages to crawl.
+#     :return: A set of visited webpage objects.
+#     """
+#     visited = set()  # 访问过的网页对象集合
+#     queue = deque([webpage(url=start_url)])  # BFS 队列，初始化时只设置 URL
+
+#     while queue and len(visited) < max_pages:
+#         current_page = queue.popleft()  # 从队列中取出一个 webpage 对象
+
+#         try:
+#             # 抓取当前页面的内容
+#             response = requests.get(current_page.url, timeout=5)
+#             response.raise_for_status()  # 出错时抛出异常
+
+#             # 获取最后修改日期并更新
+#             if current_page.date != datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc):
+#                 last_modified = response.headers.get("Last-Modified")
+#                 last_modified_date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+#                 if last_modified:
+#                     try:
+#                         # 将 Last-Modified 转换为 datetime 对象
+#                         last_modified_date = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
+#                     except ValueError:
+#                         pass
+#                 current_page.date = last_modified_date
+
+#             # 检查当前页面是否已经被访问过
+#             existing_page = next((page for page in visited if page.url == current_page.url), None)
+#             if existing_page:
+#                 # 如果 current_page 的最后修改时间更新，则删除 visited 中的项
+#                 if current_page.date > existing_page.date:
+#                     visited.remove(existing_page)
+#                 else:
+#                     continue
+
+#             # 解析 HTML
+#             tree = html.fromstring(response.content)
+#             title = tree.xpath('//title/text()')  # 获取网页标题
+#             title = title[0] if title else "Untitled"
+#             current_page.title = title  # 更新网页标题
+
+#             # 将当前页面添加到 visited 集合
+#             visited.add(current_page)
+
+#             # 提取所有链接
+#             links = tree.xpath('//a/@href')  # 解析所有超链接
+#             for link in links:
+#                 # 将相对链接转换为绝对链接
+#                 absolute_link = urljoin(current_page.url, link)
+#                 # 添加绝对链接为子链接
+#                 current_page.child_links.add(link)
+#                 # 检查链接是否已经在 visited 中
+#                 existing_page = next((page for page in visited if page.url == absolute_link), None)
+#                 if existing_page:
+#                     last_modified_date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+#                     try:
+#                         # 发送 HEAD 请求
+#                         response = requests.head(absolute_link, timeout=5)
+#                         response.raise_for_status()  # 如果状态码不是 2xx，抛出异常
+
+#                         # 获取 Last-Modified 字段
+#                         last_modified = response.headers.get("Last-Modified")
+#                         last_modified_date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+#                         if last_modified:
+#                             try:
+#                                 # 将 Last-Modified 转换为 datetime 对象
+#                                 last_modified_date = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
+#                             except ValueError:
+#                                 pass
+#                     except Exception:
+#                         pass
+#                     if last_modified_date > existing_page.date:  # 链接已经在 visited 中但页面已被更改，则创建新的 webpage 对象并加入队列
+#                         new_page = webpage(url=absolute_link, parent_links={current_page.url})
+#                         queue.append(new_page)
+#                     # 如果链接已经在 visited 中且页面未被更改，更新其 parent_links
+#                     else:
+#                         existing_page.parent_links.add(current_page.url)
+#                 else:
+#                     # 如果链接未被访问过，则创建新的 webpage 对象并加入队列
+#                     new_page = webpage(url=absolute_link, parent_links={current_page.url})
+#                     queue.append(new_page)
+
+#             print(f"Crawled: {current_page.url}")
+#         except Exception as e:
+#             print(f"Failed to crawl {current_page.url}: {e}")
+
+#     return visited
+
+def load_stopwords(filepath):
+    """
+    从文件中加载停用词。
+    :param filepath: 停用词文件路径。
+    :return: 停用词集合。
+    """
+    try:
+        with open(filepath, "r", encoding="utf-8") as file:
+            stopwords = set(line.strip() for line in file if line.strip())
+        return stopwords
+    except FileNotFoundError:
+        print(f"停用词文件 {filepath} 未找到，使用空停用词列表。")
+        return set()
+
+def extract_text_content(tree):
+    """
+    提取网页的标题和正文内容。
+    :param tree: lxml 的 HTML 解析树。
+    :return: 提取的纯文本内容。
+    """
+    # 提取标题
+    title = tree.xpath('//title/text()')
+    title_text = title[0] if title else ""
+
+    # 提取正文内容，忽略脚本和样式
+    body_text = " ".join(tree.xpath('//body//text()[not(parent::script) and not(parent::style)]'))
+
+    # 合并标题和正文内容
+    full_text = f"{title_text} {body_text}"
+    return full_text
+
+def tokenize_and_filter(text, stopwords):
+    """
+    对文本进行分词，并移除停用词。
+    :param text: 输入的纯文本。
+    :param stopwords: 停用词集合。
+    :return: 过滤后的单词列表。
+    """
+    # 使用正则表达式提取单词（忽略标点符号）
+    words = re.findall(r'\b\w+\b', text.lower())
+
+    # 移除停用词
+    filtered_words = [word for word in words if word not in stopwords]
+    return filtered_words
+
 def spider(start_url, max_pages):
     """
     A simple web spider that crawls pages using BFS.
@@ -75,6 +215,9 @@ def spider(start_url, max_pages):
     :param max_pages: The maximum number of pages to crawl.
     :return: A set of visited webpage objects.
     """
+    # 加载停用词
+    stopwords = load_stopwords("stopwords.txt")
+
     visited = set()  # 访问过的网页对象集合
     queue = deque([webpage(url=start_url)])  # BFS 队列，初始化时只设置 URL
 
@@ -109,23 +252,34 @@ def spider(start_url, max_pages):
 
             # 解析 HTML
             tree = html.fromstring(response.content)
-            title = tree.xpath('//title/text()')  # 获取网页标题
-            title = title[0] if title else "Untitled"
-            current_page.title = title  # 更新网页标题
+
+            # 提取网页标题和正文内容
+            full_text = extract_text_content(tree)
+
+            # 分词并移除停用词
+            words = tokenize_and_filter(full_text, stopwords)
+
+            # 统计词频并更新到 keywords
+            current_page.keywords = dict(Counter(words))
+
+            # 更新网页标题
+            title = tree.xpath('//title/text()')
+            current_page.title = title[0] if title else "Untitled"
 
             # 将当前页面添加到 visited 集合
             visited.add(current_page)
 
             # 提取所有链接
             links = tree.xpath('//a/@href')  # 解析所有超链接
+            child_pages = []
             for link in links:
                 # 将相对链接转换为绝对链接
                 absolute_link = urljoin(current_page.url, link)
                 # 添加绝对链接为子链接
                 current_page.child_links.add(link)
                 # 检查链接是否已经在 visited 中
-                existing_page = next((page for page in visited if page.url == absolute_link), None)
-                if existing_page:
+                existing_child_page = next((page for page in visited if page.url == absolute_link), None)
+                if existing_child_page:
                     last_modified_date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
                     try:
                         # 发送 HEAD 请求
@@ -143,16 +297,48 @@ def spider(start_url, max_pages):
                                 pass
                     except Exception:
                         pass
-                    if last_modified_date > existing_page.date:  # 链接已经在 visited 中但页面已被更改，则创建新的 webpage 对象并加入队列
-                        new_page = webpage(url=absolute_link, parent_links={current_page.url})
+                    if last_modified_date > existing_child_page.date:  # 链接已经在 visited 中但页面已被更改，则创建新的 webpage 对象并加入队列
+                        new_page = webpage(url=absolute_link, parent_links=(existing_child_page.parent_links | {current_page.url}))
                         queue.append(new_page)
+                        child_pages.append(new_page)
                     # 如果链接已经在 visited 中且页面未被更改，更新其 parent_links
                     else:
-                        existing_page.parent_links.add(current_page.url)
+                        existing_child_page.parent_links.add(current_page.url)
+                        child_pages.append(existing_child_page)
                 else:
                     # 如果链接未被访问过，则创建新的 webpage 对象并加入队列
                     new_page = webpage(url=absolute_link, parent_links={current_page.url})
                     queue.append(new_page)
+                    child_pages.append(new_page)
+
+            # 在之前是子链接但现在不是子链接的网页的父链接里移除本页
+            if existing_page:
+                # 比对 existing_page.child_links 与 child_pages
+                for child_link in existing_page.child_links:
+                    # 如果 child_link 不在 child_pages 中
+                    if child_link not in {page.url for page in child_pages}:
+                        # 在 visited 中找到对应的页面
+                        child_page = next((page for page in visited if page.url == child_link), None)
+                        if child_page:
+                            # 从 child_page 的 parent_links 中移除 current_page.url
+                            if current_page.url in child_page.parent_links:
+                                child_page.parent_links.remove(current_page.url)
+
+                            # 如果 child_page 不是 start_url 且其 parent_links 为空，则从 visited 中移除
+                            if child_page.url != start_url and not child_page.parent_links:
+                                visited.remove(child_page)
+
+                        # 在 queue 中找到对应的页面
+                        for queued_page in queue:
+                            if queued_page.url == child_link:
+                                # 从 queued_page 的 parent_links 中移除 current_page.url
+                                if current_page.url in queued_page.parent_links:
+                                    queued_page.parent_links.remove(current_page.url)
+
+                                # 如果 queued_page 不是 start_url 且其 parent_links 为空，则从 queue 中移除
+                                if queued_page.url != start_url and not queued_page.parent_links:
+                                    queue.remove(queued_page)
+                                break
 
             print(f"Crawled: {current_page.url}")
         except Exception as e:
