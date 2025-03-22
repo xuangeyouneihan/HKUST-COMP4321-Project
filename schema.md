@@ -85,3 +85,18 @@ CREATE TABLE IF NOT EXISTS inverted_index (
 - **`is_start` Flag**: Identifies the starting URL of the crawl, enabling resumption of crawling from the same point.
 - **`date` Field**: Tracks the last modified time of pages to avoid re-crawling unchanged pages.
 - **`load_stopwords` Function**: Loads a list of stop words to filter out common words (e.g., "the", "and").
+
+---
+
+#### **5. Cyclic Path Handling**
+Here's a breakdown of how cyclic paths are handled:
+
+- **Parent Links**: Each page tracks its `parent_links` (URLs linking to it). When a page is revisited, its parent links are updated to include the current page, but it is **not requeued**.
+  ```python
+  existing_child_page.parent_links.add(current_page.url)
+  ```
+  This avoids reprocessing the same page again via the queue.
+
+- **Child Links**: When processing child links, the code checks if the child is already in `visited` or the queue. If so, it updates the child's parent links but does not requeue it.
+
+---
