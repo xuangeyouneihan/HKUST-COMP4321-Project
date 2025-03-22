@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS webpages (
 - **`title`**: Title of the webpage.
 - **`date`**: Last modified date (stored as ISO-formatted string).
 - **`size`**: Size of the webpage in bytes.
-- **`body_keywords`**: Comma-separated string of **stemmed keywords** and their frequencies (e.g., `"apple:3,banana:2"`).
+- **`body_keywords`**: Comma-separated string of keywords and their frequencies (e.g., `"apple:3,banana:2"`).
 - **`parent_links`**: Comma-separated list of URLs linking to this page.
 - **`child_links`**: Comma-separated list of URLs this page links to.
 - **`is_start`**: Boolean flag (`1`/`0`) indicating if this is the starting URL of the crawl.
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS inverted_index (
 ```
 
 **Columns**:
-- **`keyword`**: Stemmed keyword (e.g., "appl" for "apple").
+- **`keyword`**: Keywords (e.g., "appl" for "apple").
 - **`postings`**: Serialized postings list for the keyword. Each entry is formatted as:
   ```
   "url:tf:tf-idf,url:tf:tf-idf,..."
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS inverted_index (
 #### **3. Key Design Choices**
 1. **No Page IDs or Word IDs**:
    - **URLs** are used directly as document identifiers instead of numeric IDs. This simplifies the schema but may impact performance for very large datasets.
-   - **Keywords** are stored as strings (stemmed) without numeric IDs, leveraging SQLite’s text indexing.
+   - **Keywords** are stored as strings without numeric IDs, leveraging SQLite’s text indexing.
 
 2. **Serialized Data Storage**:
    - **`body_keywords`**, **`parent_links`**, **`child_links`**, and **`postings`** are stored as comma-separated strings. This avoids complex join operations but requires parsing when querying.
