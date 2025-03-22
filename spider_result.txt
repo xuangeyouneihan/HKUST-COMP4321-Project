@@ -1,0 +1,203 @@
+Character (1997)
+https://comp4321-hkust.github.io/testpages/Movie/3.html
+2024-02-20T08:53:32+00:00, 4008 bytes
+character 40; search 11; titles 7; title 7; tv 6; matches 6; aka 6; imdb 5; studies 5; movie 4
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+Paula Abdul's Get Up and Dance (1994)
+https://comp4321-hkust.github.io/testpages/Movie/4.html
+2024-02-20T08:53:32+00:00, 2820 bytes
+dance 11; search 11; paula 9; abdul 9; titles 7; matches 6; imdb 5; title 5; movie 4; tv 4
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+Dinosaur Planet (2003)
+https://comp4321-hkust.github.io/testpages/Movie/1.html
+2024-02-20T08:53:32+00:00, 3605 bytes
+dinosaur 21; planet 12; search 11; titles 8; tv 7; matches 7; title 7; dinosaurs 7; imdb 5; movies 5
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+BBC news
+https://comp4321-hkust.github.io/testpages/news/bbc.htm
+2024-02-20T08:53:32+00:00, 523 bytes
+news 3; bbc 2; fifth 1; nest 1; rare 1; birds 1; project 1; mp 1; urges 1; bt 1
+https://comp4321-hkust.github.io/testpages/news/bbc1.htm
+https://comp4321-hkust.github.io/testpages/news.htm
+https://comp4321-hkust.github.io/testpages/news/bbc3.htm
+https://comp4321-hkust.github.io/testpages/news/bbc2.htm
+——————————————–
+books
+https://comp4321-hkust.github.io/testpages/books.htm
+2024-02-20T08:53:32+00:00, 624 bytes
+books 2; articles 1; read 1; automated 1; keyword 1; classification 1; information 1; retrieval 1; generation 1; machine 1
+https://comp4321-hkust.github.io/testpages/books/book2.htm
+https://comp4321-hkust.github.io/testpages/books/book3.htm
+https://comp4321-hkust.github.io/testpages/books/book1.htm
+https://comp4321-hkust.github.io/testpages/testpage.htm
+——————————————–
+Sick (1997)
+https://comp4321-hkust.github.io/testpages/Movie/6.html
+2024-02-20T08:53:32+00:00, 5243 bytes
+sick 72; aka 14; search 11; title 11; tv 9; love 8; titles 6; twisted 6; usa 6; imdb 5
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+book2
+https://comp4321-hkust.github.io/testpages/books/book2.htm
+2024-02-20T08:53:32+00:00, 2125 bytes
+data 11; bases 7; information 5; generation 4; machine 3; readable 3; bibliographic 3; retrieval 3; chapter 2; coverage 2
+https://comp4321-hkust.github.io/testpages/books.htm
+——————————————–
+Test page
+https://comp4321-hkust.github.io/testpages/testpage.htm
+2024-02-20T08:53:32+00:00, 627 bytes
+test 2; page 2; crawler 1; getting 1; admission 1; cse 1; department 1; hkust 1; read 1; international 1
+https://comp4321-hkust.github.io/testpages/Movie.htm
+https://comp4321-hkust.github.io/testpages/news.htm
+https://comp4321-hkust.github.io/testpages/ust_cse.htm
+https://comp4321-hkust.github.io/testpages/books.htm
+——————————————–
+Full Frame: Documentary Shorts (1999)
+https://comp4321-hkust.github.io/testpages/Movie/11.html
+2024-02-20T08:53:32+00:00, 2700 bytes
+search 11; frame 7; documentary 7; shorts 7; titles 6; imdb 5; matches 5; title 5; movie 4; tv 4
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+UG
+https://comp4321-hkust.github.io/testpages/ust_cse/UG.htm
+2024-02-20T08:53:32+00:00, 4157 bytes
+program 9; computer 9; science 7; programs 7; study 7; engineering 6; department 5; hkust 5; training 5; university 5
+https://comp4321-hkust.github.io/testpages/ust_cse.htm
+——————————————–
+Movie Index Page
+https://comp4321-hkust.github.io/testpages/Movie.htm
+2024-02-20T08:53:32+00:00, 19541 bytes
+2004 35; 2002 28; 2003 27; 2000 26; 2001 20; 2 13; 1996 13; 1997 12; 2005 12; season 12
+https://comp4321-hkust.github.io/testpages/Movie/48.html
+https://comp4321-hkust.github.io/testpages/Movie/203.html
+https://comp4321-hkust.github.io/testpages/Movie/272.html
+https://comp4321-hkust.github.io/testpages/Movie/37.html
+https://comp4321-hkust.github.io/testpages/Movie/212.html
+https://comp4321-hkust.github.io/testpages/Movie/268.html
+https://comp4321-hkust.github.io/testpages/Movie/69.html
+https://comp4321-hkust.github.io/testpages/Movie/292.html
+https://comp4321-hkust.github.io/testpages/Movie/263.html
+https://comp4321-hkust.github.io/testpages/Movie/104.html
+——————————————–
+Nature: Antarctica (1982)
+https://comp4321-hkust.github.io/testpages/Movie/14.html
+2024-02-20T08:53:32+00:00, 3711 bytes
+antarctica 22; search 11; tv 8; nature 8; aka 8; title 8; titles 7; antarctic 7; matches 6; imdb 5
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+Screamers (1996)
+https://comp4321-hkust.github.io/testpages/Movie/16.html
+2024-02-20T08:53:32+00:00, 3737 bytes
+screamers 13; aka 12; search 11; title 9; titles 8; matches 7; results 6; screamer 6; imdb 5; movie 5
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+7 Seconds (2005)
+https://comp4321-hkust.github.io/testpages/Movie/17.html
+2024-02-20T08:53:32+00:00, 3521 bytes
+search 11; titles 8; 7 8; results 6; aka 6; matches 6; imdb 5; tv 5; gone 5; title 5
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+Fighter (2001)
+https://comp4321-hkust.github.io/testpages/Movie/10.html
+2024-02-20T08:53:32+00:00, 13199 bytes
+fighter 228; aka 91; street 58; title 52; vg 40; english 34; ii 21; usa 21; 2 13; tv 12
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+Class of Nuke 'Em High 2 (1991)
+https://comp4321-hkust.github.io/testpages/Movie/9.html
+2024-02-20T08:53:32+00:00, 7075 bytes
+imdb 11; class 10; nuke 9; em 9; user 9; subhumanoid 7; movie 7; rating 7; meltdown 6; amazon 6
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+Isle of Man TT 2004 Review (2004)
+https://comp4321-hkust.github.io/testpages/Movie/2.html
+2024-02-20T08:53:32+00:00, 2868 bytes
+2004 11; review 11; search 11; isle 7; tt 7; titles 6; imdb 5; tv 5; matches 5; title 5
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+Lord of the Rings: The Return of the King: Extended Edition: Bonus Material (2003)
+https://comp4321-hkust.github.io/testpages/Movie/13.html
+2024-02-20T08:53:32+00:00, 2997 bytes
+search 11; return 9; lord 8; rings 8; king 8; extended 7; edition 7; bonus 7; material 7; titles 6
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+Immortal Beloved (1994)
+https://comp4321-hkust.github.io/testpages/Movie/18.html
+2024-02-20T08:53:32+00:00, 7583 bytes
+imdb 11; user 10; movie 9; van 9; immortal 8; beloved 8; ludwig 7; beethoven 7; amazon 6; rating 6
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+The Rise and Fall of ECW (2004)
+https://comp4321-hkust.github.io/testpages/Movie/5.html
+2024-02-20T08:53:32+00:00, 3928 bytes
+rise 28; fall 28; search 11; tv 9; ecw 8; titles 7; matches 6; title 6; imdb 5; movie 5
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+book1
+https://comp4321-hkust.github.io/testpages/books/book1.htm
+2024-02-20T08:53:32+00:00, 1650 bytes
+retrieval 5; information 3; main 2; chapter 2; descriptions 2; ratios 2; automated 1; keyword 1; classification 1; book 1
+https://comp4321-hkust.github.io/testpages/books.htm
+——————————————–
+book3
+https://comp4321-hkust.github.io/testpages/books/book3.htm
+2024-02-20T08:53:32+00:00, 2039 bytes
+relevance 5; mathematical 5; term 5; systems 4; books 2; information 2; document 2; doctrine 2; provide 2; agreement 2
+https://comp4321-hkust.github.io/testpages/books.htm
+——————————————–
+News
+https://comp4321-hkust.github.io/testpages/news.htm
+2024-02-20T08:53:32+00:00, 403 bytes
+news 4; bbc 1; cnn 1; main 1
+https://comp4321-hkust.github.io/testpages/testpage.htm
+https://comp4321-hkust.github.io/testpages/news/cnn.htm
+https://comp4321-hkust.github.io/testpages/news/bbc.htm
+——————————————–
+Neil Diamond: Greatest Hits Live (1988)
+https://comp4321-hkust.github.io/testpages/Movie/15.html
+2024-02-20T08:53:32+00:00, 5415 bytes
+imdb 11; user 9; neil 8; diamond 8; hits 6; live 6; 1988 6; amazon 6; details 6; rating 6
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+My Favorite Brunette (1947)
+https://comp4321-hkust.github.io/testpages/Movie/12.html
+2024-02-20T08:53:32+00:00, 6432 bytes
+imdb 11; movie 10; user 10; rating 8; favorite 7; brunette 7; 1947 6; amazon 6; quotes 5; dvdvhscdall 5
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+PG
+https://comp4321-hkust.github.io/testpages/ust_cse/PG.htm
+2024-02-20T08:53:32+00:00, 3341 bytes
+postgraduate 9; admission 8; computer 7; science 7; english 6; students 5; admitted 5; program 4; required 4; competence 4
+https://comp4321-hkust.github.io/testpages/ust_cse.htm
+——————————————–
+CNN news
+https://comp4321-hkust.github.io/testpages/news/cnn.htm
+2024-02-20T08:53:32+00:00, 469 bytes
+news 3; cnn 2; sauerkraut 1; capital 1; sweet 1; accordions 1; warming 1; cause 1; economic 1; chaos 1
+https://comp4321-hkust.github.io/testpages/news/cnn1.htm
+https://comp4321-hkust.github.io/testpages/news.htm
+https://comp4321-hkust.github.io/testpages/news/cnn2.htm
+——————————————–
+CSE department of HKUST
+https://comp4321-hkust.github.io/testpages/ust_cse.htm
+2024-02-20T08:53:32+00:00, 412 bytes
+cse 2; department 2; hkust 2; admission 2; pg 1; ug 1; main 1
+https://comp4321-hkust.github.io/testpages/ust_cse/PG.htm
+https://comp4321-hkust.github.io/testpages/ust_cse/UG.htm
+https://comp4321-hkust.github.io/testpages/testpage.htm
+——————————————–
+What the #$*! Do We Know!? (2004)
+https://comp4321-hkust.github.io/testpages/Movie/8.html
+2024-02-20T08:53:32+00:00, 4147 bytes
+search 11; title 11; aka 8; tv 6; titles 6; imdb 5; matches 5; 2004 5; usa 5; movie 4
+https://comp4321-hkust.github.io/testpages/Movie.htm
+——————————————–
+8 Man (1992)
+https://comp4321-hkust.github.io/testpages/Movie/7.html
+2024-02-20T08:53:32+00:00, 3498 bytes
+8 20; search 11; titles 8; matches 7; aka 7; tv 6; imdb 5; results 5; usa 5; title 5
+https://comp4321-hkust.github.io/testpages/Movie.htm

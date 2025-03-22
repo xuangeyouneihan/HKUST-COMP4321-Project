@@ -1,4 +1,4 @@
 requests
 lxml
 nltk
-sqlite3
+db-sqlite3
