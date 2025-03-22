@@ -24,6 +24,10 @@ pip install -r requirements.txt
 python spider_test.py
 ```
 
+## Schema
+
+[Database Schema](schema.md)
+
 ## Author
 
 * Yu Yingxuan (xuangeyouneihan)
