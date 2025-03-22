@@ -1,17 +1,13 @@
 import requests
 from lxml import html
-from collections import deque
+from collections import deque, Counter, defaultdict
 from urllib.parse import urljoin  # 用于处理相对链接
 from datetime import datetime, timezone, timedelta
 import sqlite3
 import re
-from collections import Counter
 import os
 from nltk.stem import PorterStemmer
-from collections import defaultdict
 from math import log
-
-stopwords_path = os.path.dirname(os.path.abspath(__file__)) + "/stopwords.txt"
 
 # 网页
 class webpage:
@@ -295,10 +291,14 @@ def spider(start_url, max_pages):
                         pass
                 current_page.date = last_modified_date
 
-            # 获取网页大小
-            current_page.size = response.headers.get("Content-Length")
-            if not current_page.size:
-                current_page.size = 0
+            # 使用 HTML 内容的长度计算网页大小
+            html_content = response.content  # 获取网页的二进制内容
+            current_page.size = len(html_content)  # 使用内容长度作为字节数
+
+            # # 获取网页大小
+            # current_page.size = response.headers.get("Content-Length")
+            # if not current_page.size:
+            #     current_page.size = 0
 
             # 检查当前页面是否已经被访问过
             existing_page = next((page for page in visited if page.url == current_page.url), None)
@@ -335,7 +335,7 @@ def spider(start_url, max_pages):
                 # 将相对链接转换为绝对链接
                 absolute_link = urljoin(current_page.url, link)
                 # 添加绝对链接为子链接
-                current_page.child_links.add(link)
+                current_page.child_links.add(absolute_link)
                 # 检查链接是否已经在 visited 中
                 existing_child_page = next((page for page in visited if page.url == absolute_link), None)
                 if existing_child_page:
@@ -417,7 +417,7 @@ def indexer(start_url, max_pages):
     webpages, start_page = indexer_read_database("webpages.db")
 
     # 数据库无效
-    if webpages is None or start_page is None or not indexer_check_database("webpages.db", start_url, start_page):
+    if webpages is None or start_page is None or max_pages != len(webpages) or not indexer_check_database("webpages.db", start_url, start_page):
         # 调用 spider 函数进行爬取
         webpages = spider(start_url, max_pages)
         start_page = next((page for page in webpages if page.url == start_url), None)
@@ -472,16 +472,3 @@ def indexer(start_url, max_pages):
     indexer_save_to_database("body_inverted_index.db", body_inverted_index)
     indexer_save_to_database("title_inverted_index.db", title_inverted_index)
     return body_inverted_index, title_inverted_index
-
-# Example usage
-if __name__ == "__main__":
-    # start_url = "https://www.cse.ust.hk/~kwtleung/COMP4321/testpage.htm"
-    start_url = "https://comp4321-hkust.github.io/testpages/testpage.htm"
-    max_pages = 30  # Replace with your desired maximum number of pages
-    # crawled_pages = spider(start_url, max_pages)
-
-    # # 打印爬取的网页信息
-    # print(f"Total crawled pages: {len(crawled_pages)}")
-    # for page in crawled_pages:
-    #     print(f"URL: {page.url}, Title: {page.title}, Parent Links: {page.parent_links}")
-    print(indexer(start_url, max_pages))
