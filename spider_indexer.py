@@ -2,10 +2,16 @@ import requests
 from lxml import html
 from collections import deque
 from urllib.parse import urljoin  # 用于处理相对链接
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import sqlite3
 import re
 from collections import Counter
+import os
+from nltk.stem import PorterStemmer
+from collections import defaultdict
+
+stopwords_path = os.path.dirname(os.path.abspath(__file__)) + "/stopwords.txt"
+database_path = os.path.dirname(os.path.abspath(__file__)) + "/webpages.db"
 
 # 网页
 class webpage:
@@ -42,7 +48,7 @@ def save_to_database(visited, start_url):
     :param start_url: The starting URL for the spider.
     """
     # 连接到 SQLite 数据库（如果不存在则创建）
-    conn = sqlite3.connect("webpages.db")
+    conn = sqlite3.connect(database_path)
     cursor = conn.cursor()
 
     # 创建表
@@ -69,111 +75,96 @@ def save_to_database(visited, start_url):
     conn.commit()
     conn.close()
 
-# def spider(start_url, max_pages):
-#     """
-#     A simple web spider that crawls pages using BFS.
+def read_webpages_db():
+    """
+    读取 webpages.db 并返回网页集合和 is_start 为 1 的页面。
+    :return: 一个包含 webpage 对象的集合和 start_page 对象，或者 (None, None)。
+    """
+    # 检查数据库文件是否存在
+    if not os.path.exists(database_path):
+        print("数据库文件不存在。")
+        return None, None
 
-#     :param start_url: The starting URL for the spider.
-#     :param max_pages: The maximum number of pages to crawl.
-#     :return: A set of visited webpage objects.
-#     """
-#     visited = set()  # 访问过的网页对象集合
-#     queue = deque([webpage(url=start_url)])  # BFS 队列，初始化时只设置 URL
+    # 连接到 SQLite 数据库
+    conn = sqlite3.connect(database_path)
+    cursor = conn.cursor()
 
-#     while queue and len(visited) < max_pages:
-#         current_page = queue.popleft()  # 从队列中取出一个 webpage 对象
+    try:
+        # 读取数据库中的所有记录
+        cursor.execute("SELECT url, title, date, parent_links, is_start FROM webpages")
+        rows = cursor.fetchall()
 
-#         try:
-#             # 抓取当前页面的内容
-#             response = requests.get(current_page.url, timeout=5)
-#             response.raise_for_status()  # 出错时抛出异常
+        # 转换为 webpage 对象集合
+        webpages = set()
+        start_page = None
 
-#             # 获取最后修改日期并更新
-#             if current_page.date != datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc):
-#                 last_modified = response.headers.get("Last-Modified")
-#                 last_modified_date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-#                 if last_modified:
-#                     try:
-#                         # 将 Last-Modified 转换为 datetime 对象
-#                         last_modified_date = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
-#                     except ValueError:
-#                         pass
-#                 current_page.date = last_modified_date
+        for row in rows:
+            url, title, date_str, parent_links_str, is_start = row
+            date = datetime.fromisoformat(date_str) if date_str else datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+            parent_links = set(parent_links_str.split(",")) if parent_links_str else set()
 
-#             # 检查当前页面是否已经被访问过
-#             existing_page = next((page for page in visited if page.url == current_page.url), None)
-#             if existing_page:
-#                 # 如果 current_page 的最后修改时间更新，则删除 visited 中的项
-#                 if current_page.date > existing_page.date:
-#                     visited.remove(existing_page)
-#                 else:
-#                     continue
+            page = webpage(url=url, title=title, date=date, parent_links=parent_links)
+            webpages.add(page)
 
-#             # 解析 HTML
-#             tree = html.fromstring(response.content)
-#             title = tree.xpath('//title/text()')  # 获取网页标题
-#             title = title[0] if title else "Untitled"
-#             current_page.title = title  # 更新网页标题
+            # 标注 is_start 为 1 的页面
+            if is_start == 1:
+                start_page = page
 
-#             # 将当前页面添加到 visited 集合
-#             visited.add(current_page)
+        # 如果没有找到 is_start 为 1 的页面，返回 None
+        if not start_page:
+            print("数据库中没有标记为 is_start 的页面。")
+            return None, None
 
-#             # 提取所有链接
-#             links = tree.xpath('//a/@href')  # 解析所有超链接
-#             for link in links:
-#                 # 将相对链接转换为绝对链接
-#                 absolute_link = urljoin(current_page.url, link)
-#                 # 添加绝对链接为子链接
-#                 current_page.child_links.add(link)
-#                 # 检查链接是否已经在 visited 中
-#                 existing_page = next((page for page in visited if page.url == absolute_link), None)
-#                 if existing_page:
-#                     last_modified_date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-#                     try:
-#                         # 发送 HEAD 请求
-#                         response = requests.head(absolute_link, timeout=5)
-#                         response.raise_for_status()  # 如果状态码不是 2xx，抛出异常
+        return webpages, start_page
 
-#                         # 获取 Last-Modified 字段
-#                         last_modified = response.headers.get("Last-Modified")
-#                         last_modified_date = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-#                         if last_modified:
-#                             try:
-#                                 # 将 Last-Modified 转换为 datetime 对象
-#                                 last_modified_date = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
-#                             except ValueError:
-#                                 pass
-#                     except Exception:
-#                         pass
-#                     if last_modified_date > existing_page.date:  # 链接已经在 visited 中但页面已被更改，则创建新的 webpage 对象并加入队列
-#                         new_page = webpage(url=absolute_link, parent_links={current_page.url})
-#                         queue.append(new_page)
-#                     # 如果链接已经在 visited 中且页面未被更改，更新其 parent_links
-#                     else:
-#                         existing_page.parent_links.add(current_page.url)
-#                 else:
-#                     # 如果链接未被访问过，则创建新的 webpage 对象并加入队列
-#                     new_page = webpage(url=absolute_link, parent_links={current_page.url})
-#                     queue.append(new_page)
+    except Exception as e:
+        print(f"读取数据库时出错：{e}")
+        return None, None
 
-#             print(f"Crawled: {current_page.url}")
-#         except Exception as e:
-#             print(f"Failed to crawl {current_page.url}: {e}")
+    finally:
+        conn.close()
 
-#     return visited
+def check_database(start_url, start_page):
+    # 比对 start_page 与 start_url
+    if start_page.url == start_url:
+        # 发送 HEAD 请求获取 start_url 的最后修改时间
+        try:
+            response = requests.head(start_url, timeout=5)
+            response.raise_for_status()
+            last_modified = response.headers.get("Last-Modified")
+            if last_modified:
+                start_url_last_modified = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
+            else:
+                start_url_last_modified = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        except Exception as e:
+            print(f"无法获取 start_url 的最后修改时间：{e}")
+            # 如果 HEAD 请求失败，返回True
+            return True
 
-def load_stopwords(filepath):
+        # 检查 start_url 的最后修改时间是否新于 start_page
+        if start_url_last_modified <= start_page.date:
+            # 检查数据库文件的最后修改时间
+            db_last_modified = datetime.fromtimestamp(os.path.getmtime(database_path), tz=timezone.utc)
+            if datetime.now(timezone.utc) - db_last_modified < timedelta(days=1):
+                # 数据库文件有效，返回集合和 start_page
+                return True
+
+    # 如果条件不满足，删除数据库文件
+    print("数据库文件无效，删除数据库。")
+    os.remove(database_path)
+    return False
+
+def load_stopwords():
     """
     从文件中加载停用词。
-    :param filepath: 停用词文件路径。
     :return: 停用词集合。
     """
     try:
-        with open(filepath, "r", encoding="utf-8") as file:
+        with open(stopwords_path, "r", encoding="utf-8") as file:
             stopwords = set(line.strip() for line in file if line.strip())
         return stopwords
     except FileNotFoundError:
-        print(f"停用词文件 {filepath} 未找到，使用空停用词列表。")
+        print(f"停用词文件 {stopwords_path} 未找到，使用空停用词列表。")
         return set()
 
 def extract_text_content(tree):
@@ -216,7 +207,7 @@ def spider(start_url, max_pages):
     :return: A set of visited webpage objects.
     """
     # 加载停用词
-    stopwords = load_stopwords("stopwords.txt")
+    stopwords = load_stopwords()
 
     visited = set()  # 访问过的网页对象集合
     queue = deque([webpage(url=start_url)])  # BFS 队列，初始化时只设置 URL
@@ -345,6 +336,96 @@ def spider(start_url, max_pages):
             print(f"Failed to crawl {current_page.url}: {e}")
 
     return visited
+
+# def indexer(start_url, max_pages, phrase):
+#     """
+#     从 phrase 中移除停用词，并尝试从数据库读取数据。
+#     如果数据库不存在或无效，则调用 spider 函数进行爬取。
+#     :param start_url: 起始 URL。
+#     :param max_pages: 最大爬取页面数。
+#     :param phrase: 输入的短语字符串。
+#     :return: 移除停用词后的单词列表。
+#     """
+#     # 加载停用词
+#     stopwords = load_stopwords()
+
+#     # 分词并移除停用词
+#     words = re.findall(r'\b\w+\b', phrase.lower())  # 使用正则表达式分词
+#     filtered_words = [word for word in words if word not in stopwords]
+
+#     # 尝试从数据库读取数据
+#     webpages, start_page = read_webpages_db(start_url)
+
+#     # 数据库无效
+#     if webpages is None or start_page is None or not check_database(start_url, start_page):
+#         print("Invalid database, database outdated or the database does not exist. Calling spider()...")
+#         # 调用 spider 函数进行爬取
+#         webpages = spider(start_url, max_pages)
+#         start_page = next((page for page in webpages if page.url == start_url), None)
+#         # 保存爬取结果到数据库
+#         save_to_database(webpages, start_url)
+
+#     # 初始化 PorterStemmer
+#     stemmer = PorterStemmer()
+
+#     # 对 filtered_words 进行 Porter Stemming
+#     stemmed_filtered_words = [stemmer.stem(word) for word in filtered_words]
+
+#     # 对 webpages 中的每个 webpage 的 keywords 进行 Porter Stemming
+#     for page in webpages:
+#         stemmed_keywords = {stemmer.stem(word): freq for word, freq in page.keywords.items()}
+#         page.keywords = stemmed_keywords  # 将处理后的关键词写回 keywords 属性
+
+#     return filtered_words
+
+def indexer(start_url, max_pages):
+    """
+    尝试从数据库读取数据或调用 spider 爬取网页，
+    并基于单词和动态生成的短语构建倒排索引。
+    :param start_url: 起始 URL。
+    :param max_pages: 最大爬取页面数。
+    :param phrase: 输入的短语字符串。
+    :return: 倒排索引。
+    """
+    # 尝试从数据库读取数据
+    webpages, start_page = read_webpages_db(start_url)
+
+    # 数据库无效
+    if webpages is None or start_page is None or not check_database(start_url, start_page):
+        print("Invalid database, database outdated or the database does not exist. Calling spider()...")
+        # 调用 spider 函数进行爬取
+        webpages = spider(start_url, max_pages)
+        start_page = next((page for page in webpages if page.url == start_url), None)
+        # 保存爬取结果到数据库
+        save_to_database(webpages, start_url)
+
+    # 初始化 PorterStemmer
+    stemmer = PorterStemmer()
+
+    # 对 webpages 中的每个 webpage 的 keywords 进行 Porter Stemming
+    for page in webpages:
+        stemmed_keywords = {stemmer.stem(word): freq for word, freq in page.keywords.items()}
+        page.keywords = stemmed_keywords  # 将处理后的关键词写回 keywords 属性
+
+    # 构建倒排索引（支持单词和动态生成的短语）
+    inverted_index = defaultdict(list)
+
+    for page in webpages:
+        # 单词索引
+        for keyword in page.keywords:
+            inverted_index[keyword].append(page.url)
+
+        # 动态生成短语索引
+        content = list(page.keywords.keys())  # 获取关键词列表
+        for i in range(len(content) - 1):
+            phrase = f"{content[i]} {content[i + 1]}"
+            inverted_index[phrase].append(page.url)
+
+    # 去重：确保每个 URL 在倒排索引中只出现一次
+    for key in inverted_index:
+        inverted_index[key] = list(set(inverted_index[key]))
+
+    return inverted_index
 
 # Example usage
 if __name__ == "__main__":
