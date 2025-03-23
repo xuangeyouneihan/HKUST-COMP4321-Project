@@ -12,8 +12,7 @@ import spider_indexer
 import nltk
 nltk.download("wordnet")
 
-print(
-    """
+print("""
        　  　▃▆█▇▄▖
 　 　 　 ▟◤▖　　　◥█▎
    　 ◢◤　 ▐　　　 　▐▉
@@ -24,8 +23,7 @@ print(
 ▐█▙▂　　     　◢██◤
 ◥██◣　　　　◢▄◤
  　　▀██▅▇▀
-"""
-)
+""")
 
 # start_url = "https://www.cse.ust.hk/~kwtleung/COMP4321/testpage.htm"
 start_url = "https://comp4321-hkust.github.io/testpages/testpage.htm"

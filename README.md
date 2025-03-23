@@ -39,7 +39,7 @@ sudo pacman -S python python-requests python-lxml nltk-data python-nltk
 python spider_test.py
 ```
 
-The test program will first try to read `webpages.db`. If the database can be read, it will use the data in the database to generate `spider_result.txt`. Otherwise, it will crawl the webpages and generate `spider_result.txt`. Then, it will run the indexer to generate or update `body_inverted_index.db` and `title_inverted_index.db`.
+The test program will first try to read `webpages.db`. If the database can be read, it will use the data in the database to generate `spider_result.txt`. Otherwise, it will crawl the webpages and generate `spider_result.txt`. Then, it will run the indexer to generate or update `body_inverted_index.db` and `title_inverted_index.db`. Therefore, if you want to test the spider, remove `webpages.db` first.
 
 ### Last Modified Date Handling
 
