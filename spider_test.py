@@ -9,6 +9,9 @@ import spider_indexer
 # sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 # sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
+import nltk
+nltk.download("wordnet")
+
 print(
     """
        　  　▃▆█▇▄▖
@@ -24,51 +27,9 @@ print(
 """
 )
 
-# def save_webpages_to_file(webpages, output_file):
-#     """
-#     将网页集合中的每个网页的内容按指定格式写入到文本文件中。
-#     :param webpages: 包含网页对象的集合。
-#     :param output_file: 输出文件的路径。
-#     """
-#     with open(output_file, "w", encoding="utf-8") as file:
-#         total_pages = len(webpages)
-#         for index, page in enumerate(webpages):
-#             # 处理标题关键词
-#             stopwords = spider_indexer.load_stopwords("stopwords.txt")
-#             title_words = spider_indexer.tokenize_and_filter(page.title, stopwords)  # 分词并移除停用词
-
-#             # 合并正文关键词和标题关键词
-#             combined_keywords = Counter(page.body_keywords) + title_words
-
-#             # 获取关键词词频的前 10 项
-#             top_keywords = combined_keywords.most_common(10)
-
-#             # 写入页面标题
-#             file.write(f"{page.title}\n")
-#             # 写入 URL
-#             file.write(f"{page.url}\n")
-#             # 写入最后修改日期和页面大小
-#             file.write(f"{page.date.isoformat()}, {page.size} bytes\n")
-#             # 写入前 10 个关键词及其频率
-#             keywords_str = "; ".join(f"{key} {value}" for key, value in top_keywords)
-#             file.write(f"{keywords_str}\n")
-#             # 写入子链接
-#             for child_link in page.child_links:
-#                 file.write(f"{child_link}\n")
-#             # 写入分隔符（仅当不是最后一个网页时）
-#             if index < total_pages - 1:
-#                 file.write("——————————————–\n")
-
 # start_url = "https://www.cse.ust.hk/~kwtleung/COMP4321/testpage.htm"
 start_url = "https://comp4321-hkust.github.io/testpages/testpage.htm"
 max_pages = 30
-
-# crawled_pages = spider_indexer.spider(start_url, max_pages)
-
-# # 打印爬取的网页信息
-# print(f"Total crawled pages: {len(crawled_pages)}")
-# for page in crawled_pages:
-#     print(f"URL: {page.url}, Title: {page.title}, Parent Links: {page.parent_links}")
 
 # 尝试从数据库读取数据
 webpages, start_page = spider_indexer.indexer_read_database("webpages.db")
@@ -113,3 +74,5 @@ with open((os.path.dirname(os.path.abspath(__file__)) + "/spider_result.txt"), "
         if index < total_pages - 1:
             file.write("——————————————–\n")
     file.close()
+
+spider_indexer.indexer(start_url, max_pages)
