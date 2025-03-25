@@ -67,4 +67,4 @@ Here's a breakdown of how cyclic paths are handled:
 
 - Yu Yingxuan (xuangeyouneihan)
 - Du Maosen (ThisIsNotCodingJellyfish)
-- The two other persons in our group did not participate in the project. Wu Lixin has applied to late-drop for this course, so it is unfair to let him contribute something to our project. Even so, he emailed to us and demonstrated his case, and he provided some ideas to our program. By contrast, Lin Xuanyu is much more irresponsible. He has not replied any words to we three since our group was found, whether via Email or via Canvas.
+- The two other persons in our group did not participate in the project. Wu Lixin has applied to late-drop for this course, so it is unfair to let him contribute something to our project. Even so, he emailed to us and demonstrated his case, and he provided some ideas to our program. By contrast, Lin Xuanyu is much more irresponsible. He was completely absent in our project, and he did not even show up in Email or Canvas. He has not replied any word to us three since our group was found.
