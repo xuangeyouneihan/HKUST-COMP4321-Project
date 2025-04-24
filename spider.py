@@ -1,13 +1,13 @@
 import requests
 from lxml import html
-from collections import deque, Counter, defaultdict
+from collections import deque, Counter
 from urllib.parse import urljoin  # 用于处理相对链接
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import sqlite3
 import re
 import os
-from nltk.stem import PorterStemmer
-from math import log
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # 网页
 class webpage:
@@ -38,49 +38,7 @@ class webpage:
     def __hash__(self):
         return hash(self.url)
 
-def spider_save_to_database(database_file, visited, start_url):
-    """
-    Save all visited webpages to a SQLite database.
-
-    :param database_file: SQLite 数据库文件名。
-    :param visited: 一个 webpage 的集合。
-    :param start_url: 起始 URL。
-    """
-    # 连接到 SQLite 数据库（如果不存在则创建）
-    conn = sqlite3.connect(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
-    cursor = conn.cursor()
-
-    # 创建表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS webpages (
-            url TEXT PRIMARY KEY,
-            title TEXT,
-            date TEXT,
-            size INTEGER,
-            body_keywords TEXT,
-            parent_links TEXT,
-            child_links TEXT,
-            is_start INTEGER
-        )
-    ''')
-
-    # 插入数据
-    for page in visited:
-        parent_links_str = ",".join(page.parent_links)  # 将父链接集合转换为字符串
-        child_links_str = ",".join(page.child_links)  # 将子链接集合转换为字符串
-        body_keywords_str = ",".join(f"{key}:{value}" for key, value in page.body_keywords.items())  # 将关键词及其频率转换为字符串
-        is_start = 1 if page.url == start_url else 0  # 标记是否为起始 URL
-
-        cursor.execute('''
-            INSERT OR REPLACE INTO webpages (url, title, date, size, body_keywords, parent_links, child_links, is_start)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (page.url, page.title, page.date.isoformat(), page.size, body_keywords_str, parent_links_str, child_links_str, is_start))
-
-    # 提交更改并关闭连接
-    conn.commit()
-    conn.close()
-
-def indexer_read_database(database_file):
+def read_database(database_file):
     """
     读取 webpages.db 并返回网页集合和 is_start 为 1 的页面。
     :param database_file: SQLite 数据库文件名。
@@ -148,70 +106,43 @@ def indexer_read_database(database_file):
     finally:
         conn.close()
 
-def indexer_check_database(database_file, start_url, start_page):
+def save_to_database(database_file, visited, start_url):
     """
+    Save all visited webpages to a SQLite database.
+
     :param database_file: SQLite 数据库文件名。
+    :param visited: 一个 webpage 的集合。
     :param start_url: 起始 URL。
-    :param start_url: 起始 webpage。
-    """
-    # 比对 start_page 与 start_url
-    if start_page.url == start_url:
-        # 发送 HEAD 请求获取 start_url 的最后修改时间
-        try:
-            response = requests.head(start_url, timeout=5)
-            response.raise_for_status()
-            last_modified = response.headers.get("Last-Modified")
-            if last_modified:
-                start_url_last_modified = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
-            else:
-                start_url_last_modified = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-        except Exception:
-            # 如果 HEAD 请求失败，返回True
-            return True
-
-        # 检查 start_url 的最后修改时间是否新于 start_page
-        if start_url_last_modified > start_page.date:
-            # 检查数据库文件的最后修改时间
-            db_last_modified = datetime.fromtimestamp(os.path.getmtime(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file), tz=timezone.utc)
-            if datetime.now(timezone.utc) - db_last_modified < timedelta(days=1):
-                # 数据库文件有效，返回集合和 start_page
-                return True
-            else:
-                # 数据库需要更新，只返回 False 不删除数据库
-                return False
-
-    # 如果条件不满足，删除数据库文件
-    os.remove(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
-    return False
-
-def indexer_save_to_database(database_file, inverted_index):
-    """
-    将单个倒排索引存入指定的 SQLite 数据库文件。
-    :param database_file: SQLite 数据库文件名。
-    :param inverted_index: 倒排索引，格式为 {keyword: [{"url": url, "tf": tf, "tf-idf": tf-idf}, ...]}。
     """
     # 连接到 SQLite 数据库（如果不存在则创建）
     conn = sqlite3.connect(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
     cursor = conn.cursor()
 
-    # 创建表存储倒排索引
+    # 创建表
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS inverted_index (
-            keyword TEXT PRIMARY KEY,
-            postings TEXT
+        CREATE TABLE IF NOT EXISTS webpages (
+            url TEXT PRIMARY KEY,
+            title TEXT,
+            date TEXT,
+            size INTEGER,
+            body_keywords TEXT,
+            parent_links TEXT,
+            child_links TEXT,
+            is_start INTEGER
         )
     ''')
 
-    # 插入倒排索引
-    for keyword, postings in inverted_index.items():
-        # 将 postings 转换为字符串格式存储
-        postings_str = ",".join(
-            f"{posting['url']}:{posting['tf']}:{posting['tf-idf']:.4f}" for posting in postings
-        )
+    # 插入数据
+    for page in visited:
+        parent_links_str = ",".join(page.parent_links)  # 将父链接集合转换为字符串
+        child_links_str = ",".join(page.child_links)  # 将子链接集合转换为字符串
+        body_keywords_str = ",".join(f"{key}:{value}" for key, value in page.body_keywords.items())  # 将关键词及其频率转换为字符串
+        is_start = 1 if page.url == start_url else 0  # 标记是否为起始 URL
+
         cursor.execute('''
-            INSERT OR REPLACE INTO inverted_index (keyword, postings)
-            VALUES (?, ?)
-        ''', (keyword, postings_str))
+            INSERT OR REPLACE INTO webpages (url, title, date, size, body_keywords, parent_links, child_links, is_start)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (page.url, page.title, page.date.isoformat(), page.size, body_keywords_str, parent_links_str, child_links_str, is_start))
 
     # 提交更改并关闭连接
     conn.commit()
@@ -228,23 +159,6 @@ def load_stopwords(stopwords_file):
         return stopwords
     except FileNotFoundError:
         return set()
-
-def extract_text_content(tree):
-    """
-    提取网页的标题和正文内容。
-    :param tree: lxml 的 HTML 解析树。
-    :return: 提取的纯文本内容。
-    """
-    # 提取标题
-    title = tree.xpath('//title/text()')
-    title_text = title[0] if title else ""
-
-    # 提取正文内容，忽略脚本和样式
-    body_text = " ".join(tree.xpath('//body//text()[not(parent::script) and not(parent::style)]'))
-
-    # 合并标题和正文内容
-    full_text = f"{title_text} {body_text}"
-    return full_text
 
 def tokenize_and_filter(text, stopwords):
     """
@@ -274,6 +188,14 @@ def spider(start_url, max_pages):
     visited = set()  # 访问过的网页对象集合
     queue = deque([webpage(url=start_url)])  # BFS 队列，初始化时只设置 URL
 
+    # 尝试从数据库读取数据
+    webpages, start_page = read_database("webpages.db")
+
+    # 检查数据库是否有效
+    valid_old_database = True
+    if webpages is None or start_page is None or max_pages != len(webpages) or start_page.url != start_url:
+        valid_old_database = False
+
     while queue and len(visited) < max_pages:
         current_page = queue.popleft()  # 从队列中取出一个 webpage 对象
 
@@ -291,14 +213,14 @@ def spider(start_url, max_pages):
                     current_page.date = last_modified_date  # 更新为 Last-Modified 的值
                 except ValueError:
                     # 如果 Last-Modified 不存在
-                    if current_page.date == datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc) or response.status_code != 304:
+                    if response.status_code != 304 or not valid_old_database:
                         # 将当前时间（UTC）作为日期
                         current_page.date = datetime.now(timezone.utc)
                     else:
                         continue
             else:
                 # 如果 Last-Modified 不存在
-                if current_page.date == datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc) or response.status_code != 304:
+                if response.status_code != 304 or not valid_old_database:
                     # 将当前时间（UTC）作为日期
                     current_page.date = datetime.now(timezone.utc)
                 else:
@@ -307,11 +229,6 @@ def spider(start_url, max_pages):
             # 使用 HTML 内容的长度计算网页大小
             html_content = response.content  # 获取网页的二进制内容
             current_page.size = len(html_content)  # 使用内容长度作为字节数
-
-            # # 获取网页大小
-            # current_page.size = response.headers.get("Content-Length")
-            # if not current_page.size:
-            #     current_page.size = 0
 
             # 检查当前页面是否已经被访问过
             existing_page = next((page for page in visited if page.url == current_page.url), None)
@@ -423,73 +340,5 @@ def spider(start_url, max_pages):
         except Exception:
             pass
 
-    spider_save_to_database("webpages.db", visited, start_url)
+    save_to_database("webpages.db", visited, start_url)
     return visited
-
-def indexer(start_url, max_pages):
-    """
-    尝试从数据库读取数据或调用 spider 爬取网页，
-    并基于正文关键词和标题关键词构建倒排索引。
-    :param start_url: 起始 URL。
-    :param max_pages: 最大爬取页面数。
-    :return: 包含正文关键词和标题关键词的倒排索引。
-    """
-    # 尝试从数据库读取数据
-    webpages, start_page = indexer_read_database("webpages.db")
-
-    # 数据库无效
-    if webpages is None or start_page is None or max_pages != len(webpages) or not indexer_check_database("webpages.db", start_url, start_page):
-        # 调用 spider 函数进行爬取
-        webpages = spider(start_url, max_pages)
-        start_page = next((page for page in webpages if page.url == start_url), None)
-
-    # 初始化 PorterStemmer
-    stemmer = PorterStemmer()
-
-    # 加载停用词
-    stopwords = load_stopwords("stopwords.txt")
-
-    # 构建正文关键词倒排索引
-    body_inverted_index = defaultdict(list)
-    body_document_frequencies = defaultdict(int)  # 用于存储每个正文词干的文档频率（DF）
-
-    # 构建标题关键词倒排索引
-    title_inverted_index = defaultdict(list)
-    title_document_frequencies = defaultdict(int)  # 用于存储每个标题词干的文档频率（DF）
-
-    total_documents = len(webpages)  # 文档总数
-
-    # 遍历每个网页，填充正文和标题的倒排索引
-    for page in webpages:
-        # 处理正文关键词
-        for keyword, tf in page.body_keywords.items():
-            stemmed_keyword = stemmer.stem(keyword)
-            body_inverted_index[stemmed_keyword].append({"url": page.url, "tf": tf})
-            body_document_frequencies[stemmed_keyword] += 1
-
-        # 处理标题关键词
-        title_words = tokenize_and_filter(page.title, stopwords)  # 分词并移除停用词
-        title_keywords = Counter(stemmer.stem(word) for word in title_words)  # 统计词频并词干化
-        for keyword, tf in title_keywords.items():
-            title_inverted_index[keyword].append({"url": page.url, "tf": tf})
-            title_document_frequencies[keyword] += 1
-
-    # 计算正文关键词的 TF-IDF 权重并更新倒排索引
-    for keyword, postings in body_inverted_index.items():
-        df = body_document_frequencies[keyword]  # 文档频率
-        idf = log(total_documents / (1 + df))  # 计算 IDF，避免除以 0
-        for posting in postings:
-            tf = posting["tf"]
-            posting["tf-idf"] = tf * idf  # 计算 TF-IDF 权重
-
-    # 计算标题关键词的 TF-IDF 权重并更新倒排索引
-    for keyword, postings in title_inverted_index.items():
-        df = title_document_frequencies[keyword]  # 文档频率
-        idf = log(total_documents / (1 + df))  # 计算 IDF，避免除以 0
-        for posting in postings:
-            tf = posting["tf"]
-            posting["tf-idf"] = tf * idf  # 计算 TF-IDF 权重
-
-    indexer_save_to_database("body_inverted_index.db", body_inverted_index)
-    indexer_save_to_database("title_inverted_index.db", title_inverted_index)
-    return body_inverted_index, title_inverted_index

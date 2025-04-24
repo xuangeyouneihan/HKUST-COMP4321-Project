@@ -2,7 +2,8 @@ import os
 import sys
 from collections import Counter
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import spider_indexer
+import spider
+import indexer
 # import io
 
 # # 强制将标准输出和错误流的编码设置为 UTF-8
@@ -30,20 +31,20 @@ start_url = "https://comp4321-hkust.github.io/testpages/testpage.htm"
 max_pages = 30
 
 # 尝试从数据库读取数据
-webpages, start_page = spider_indexer.indexer_read_database("webpages.db")
+webpages, start_page = indexer.read_database("webpages.db")
 
 # 数据库无效
-if webpages is None or start_page is None or not spider_indexer.indexer_check_database("webpages.db", start_url, start_page):
+if webpages is None or start_page is None or not indexer.check_database("webpages.db", start_url, start_page):
     # 调用 spider 函数进行爬取
-    webpages = spider_indexer.spider(start_url, max_pages)
+    webpages = spider.spider(start_url, max_pages)
     start_page = next((page for page in webpages if page.url == start_url), None)
 
 with open((os.path.dirname(os.path.abspath(__file__)) + "/spider_result.txt"), "w", encoding="utf-8") as file:
     total_pages = len(webpages)
     for index, page in enumerate(webpages):
         # 处理标题关键词
-        stopwords = spider_indexer.load_stopwords("stopwords.txt")
-        title_words = spider_indexer.tokenize_and_filter(page.title, stopwords)  # 分词并移除停用词
+        stopwords = spider.load_stopwords("stopwords.txt")
+        title_words = spider.tokenize_and_filter(page.title, stopwords)  # 分词并移除停用词
         title_keywords = Counter(title_words)  # 统计词频
 
         # 合并正文关键词和标题关键词
@@ -73,4 +74,4 @@ with open((os.path.dirname(os.path.abspath(__file__)) + "/spider_result.txt"), "
             file.write("——————————————–\n")
     file.close()
 
-spider_indexer.indexer(start_url, max_pages)
+indexer.indexer(start_url, max_pages)
