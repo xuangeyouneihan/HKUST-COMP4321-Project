@@ -114,7 +114,7 @@ html_template = """
 <pre style="text-align: left; font-family: inherit; font-size: inherit; font-weight: inherit; width: fit-content; margin-left: auto; margin-right: auto;">
 <strong>{{ score|round(4) }}</strong>&#9;<a href="{{ page.url }}" target="_blank"  class="title-link" style="color: inherit; text-decoration: none;">{{ page.title or "Untitled" }}</a>
 &#9;&#9;<a href="{{ page.url }}" target="_blank">{{ page.url }}</a>
-&#9;&#9;{{ page.date }}, {{ page.size }}
+&#9;&#9;{{ page.date }}, {{ page.size }} Bytes
 &#9;&#9;{{ page.keywords }}
 {%- for link in page.parent_links %}
 &#9;&#9;<a href="{{ link }}" target="_blank">{{ link }}</a>
