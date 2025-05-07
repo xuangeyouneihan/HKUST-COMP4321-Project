@@ -5,7 +5,7 @@ from collections import defaultdict, Counter
 from nltk.stem import PorterStemmer
 from datetime import datetime, timezone, timedelta
 import os
-from spider import read_database as spider_read_database, load_stopwords, from_base64
+from spider import spider, read_database as spider_read_database, webpage, load_stopwords, from_base64
 from indexer import indexer, check_database
 
 # 加载倒排索引数据
@@ -158,7 +158,7 @@ def retrieval(start_url, query, max_pages=300, max_results=50):
     stemmer = PorterStemmer()
     body_index = None
     title_index = None
-    _, start_page = spider_read_database("webpages.db")
+    webpages, start_page = spider_read_database("webpages.db")
     # 没有数据库或数据库无效，重新生成索引
     if (not os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "body_inverted_index.db"))) or (not os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "title_inverted_index.db"))) or (not os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "webpages.db"))) or (datetime.now(timezone.utc) - datetime.fromtimestamp(os.path.getmtime(os.path.join(os.path.dirname(os.path.abspath(__file__)), "body_inverted_index.db")), tz=timezone.utc) > timedelta(days=1)) or (datetime.now(timezone.utc) - datetime.fromtimestamp(os.path.getmtime(os.path.join(os.path.dirname(os.path.abspath(__file__)), "title_inverted_index.db")), tz=timezone.utc) > timedelta(days=1)) or (not check_database("webpages.db", start_url, start_page)):
         body_index, title_index = indexer(start_url, max_pages)
@@ -226,14 +226,27 @@ def retrieval(start_url, query, max_pages=300, max_results=50):
                 boost = 1.5
             scores[url] *= boost
 
-    # 排序并返回得分前 max_results 的文档
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return ranked[:max_results]
+    # 排序并截取前 max_results 条文档（如果结果数量少于 max_results，则返回全部）
+    ranked = sorted([(url, score) for url, score in scores.items() if score > 0], key=lambda x: x[1], reverse=True)
+    results = ranked[:max_results]
 
-# 简单测试
-if __name__ == "__main__":
-    query = input("请输入查询：")
-    results = retrieval(query)
-    print("排名结果：")
+    # 构造一个从 url 到 webpage 对象的字典（如果 webpages 为 None，则字典为空）
+    webpage_dict = { page.url: page for page in webpages } if webpages else {}
+
+    final_results = []
     for url, score in results:
-        print(f"{url}: {score:.4f}")
+        page_obj = webpage_dict.get(url)
+        if page_obj is None:
+            # 调用 spider 函数爬取，start_url 设为当前 url，max_pages 为 1，bool_save_to_database 为 False
+            new_pages = spider(url, 1, False)
+            if new_pages:
+                for p in new_pages:
+                    if p.url == url:
+                        page_obj = p
+                        break
+        # 如果仍然未找到，则将 url 原样返回（一般不会发生）
+        if page_obj is None:
+            page_obj = url
+        final_results.append((page_obj, score))
+
+    return final_results

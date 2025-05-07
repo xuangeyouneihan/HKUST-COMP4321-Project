@@ -200,7 +200,7 @@ def tokenize_and_filter(text, stopwords):
     filtered_words = [word for word in words if word not in stopwords]
     return filtered_words
 
-def spider(start_url, max_pages):
+def spider(start_url, max_pages, bool_save_to_database=True):
     """
     A simple web spider that crawls pages using BFS.
 
@@ -378,5 +378,6 @@ def spider(start_url, max_pages):
         except Exception:
             pass
 
-    save_to_database("webpages.db", visited, start_url)
+    if bool_save_to_database:
+        save_to_database("webpages.db", visited, start_url)
     return visited

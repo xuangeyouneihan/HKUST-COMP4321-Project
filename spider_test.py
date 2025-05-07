@@ -30,7 +30,7 @@ start_url = "https://www.cse.ust.hk/~kwtleung/COMP4321/testpage.htm"
 max_pages = 30
 
 # 尝试从数据库读取数据
-webpages, start_page = indexer.read_database("webpages.db")
+webpages, start_page = spider.read_database("webpages.db")
 
 # 数据库无效
 if webpages is None or start_page is None or not indexer.check_database("webpages.db", start_url, start_page):
