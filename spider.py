@@ -7,6 +7,7 @@ import sqlite3
 import re
 import os
 import sys
+import base64
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # 网页
@@ -38,47 +39,68 @@ class webpage:
     def __hash__(self):
         return hash(self.url)
 
+def to_base64(s):
+    """将字符串 s 编码成 base64 字符串。"""
+    return base64.b64encode(s.encode("utf-8")).decode("utf-8")
+
+def from_base64(b64_str):
+    """将 base64 字符串解码成 UTF-8 字符串。"""
+    return base64.b64decode(b64_str.encode("utf-8")).decode("utf-8")
+
 def read_database(database_file):
     """
-    读取 webpages.db 并返回网页集合和 is_start 为 1 的页面。
+    读取 webpages.db 并返回网页集合和 is_start 为 1 的页面，
+    数据库中的每一项均为 base64 编码，读取后进行解码。
     :param database_file: SQLite 数据库文件名。
-    :return: 一个包含 webpage 对象的集合和 start_page 对象，或者 (None, None)。
+    :return: (webpage 集合, start_page) 或 (None, None)
     """
-    # 检查数据库文件是否存在
-    if not os.path.exists(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file):
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), database_file)
+    if not os.path.exists(db_path):
         return None, None
 
-    # 连接到 SQLite 数据库
-    conn = sqlite3.connect(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     try:
-        # 读取数据库中的所有记录
         cursor.execute("SELECT url, title, date, size, body_keywords, parent_links, child_links, is_start FROM webpages")
         rows = cursor.fetchall()
-
-        # 转换为 webpage 对象集合
         webpages = set()
         start_page = None
-
         for row in rows:
-            url, title, date_str, size, body_keywords_str, parent_links_str, child_links_str, is_start = row
+            # 解码每个字段
+            try:
+                url = from_base64(row[0])
+                title = from_base64(row[1])
+                date_str = from_base64(row[2])
+                size_str = from_base64(row[3])
+                body_keywords_str = from_base64(row[4]) if row[4] else ""
+                parent_links_str = from_base64(row[5]) if row[5] else ""
+                child_links_str = from_base64(row[6]) if row[6] else ""
+                is_start_str = from_base64(row[7]) if row[7] else "0"
+            except Exception:
+                continue
 
-            # 解析日期
             date = datetime.fromisoformat(date_str) if date_str else datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+            try:
+                size = int(size_str)
+            except:
+                size = 0
 
-            # 解析 body_keywords
             body_keywords = {}
             if body_keywords_str:
                 for item in body_keywords_str.split(","):
-                    key, value = item.split(":")
-                    body_keywords[key] = int(value)
+                    parts = item.split(":")
+                    if len(parts) == 2:
+                        key = parts[0]
+                        try:
+                            value = int(parts[1])
+                        except:
+                            value = 0
+                        body_keywords[key] = value
 
-            # 解析 parent_links 和 child_links
             parent_links = set(parent_links_str.split(",")) if parent_links_str else set()
             child_links = set(child_links_str.split(",")) if child_links_str else set()
 
-            # 创建 webpage 对象
             page = webpage(
                 url=url,
                 title=title,
@@ -89,12 +111,9 @@ def read_database(database_file):
                 child_links=child_links
             )
             webpages.add(page)
-
-            # 标注 is_start 为 1 的页面
-            if is_start == 1:
+            if is_start_str == "1":
                 start_page = page
 
-        # 如果没有找到 is_start 为 1 的页面，返回 None
         if not start_page:
             return None, None
 
@@ -109,13 +128,12 @@ def read_database(database_file):
 def save_to_database(database_file, visited, start_url):
     """
     Save all visited webpages to a SQLite database.
-
+    存入数据库时，每个字段都以 base64 编码后存储。
     :param database_file: SQLite 数据库文件名。
     :param visited: 一个 webpage 的集合。
     :param start_url: 起始 URL。
     """
-    # 连接到 SQLite 数据库（如果不存在则创建）
-    conn = sqlite3.connect(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
+    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.abspath(__file__)), database_file))
     cursor = conn.cursor()
 
     # 创建表
@@ -124,27 +142,35 @@ def save_to_database(database_file, visited, start_url):
             url TEXT PRIMARY KEY,
             title TEXT,
             date TEXT,
-            size INTEGER,
+            size TEXT,
             body_keywords TEXT,
             parent_links TEXT,
             child_links TEXT,
-            is_start INTEGER
+            is_start TEXT
         )
     ''')
 
-    # 插入数据
     for page in visited:
-        parent_links_str = ",".join(page.parent_links)  # 将父链接集合转换为字符串
-        child_links_str = ",".join(page.child_links)  # 将子链接集合转换为字符串
-        body_keywords_str = ",".join(f"{key}:{value}" for key, value in page.body_keywords.items())  # 将关键词及其频率转换为字符串
-        is_start = 1 if page.url == start_url else 0  # 标记是否为起始 URL
+        parent_links_str = ",".join(page.parent_links)
+        child_links_str = ",".join(page.child_links)
+        body_keywords_str = ",".join(f"{key}:{value}" for key, value in page.body_keywords.items())
+        is_start = "1" if page.url == start_url else "0"
+
+        # 将所有数据转换为字符串，然后分别 Base64 编码
+        url_b64 = to_base64(page.url)
+        title_b64 = to_base64(page.title)
+        date_b64 = to_base64(page.date.isoformat())
+        size_b64 = to_base64(str(page.size))
+        body_keywords_b64 = to_base64(body_keywords_str)
+        parent_links_b64 = to_base64(parent_links_str)
+        child_links_b64 = to_base64(child_links_str)
+        is_start_b64 = to_base64(is_start)
 
         cursor.execute('''
             INSERT OR REPLACE INTO webpages (url, title, date, size, body_keywords, parent_links, child_links, is_start)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (page.url, page.title, page.date.isoformat(), page.size, body_keywords_str, parent_links_str, child_links_str, is_start))
+        ''', (url_b64, title_b64, date_b64, size_b64, body_keywords_b64, parent_links_b64, child_links_b64, is_start_b64))
 
-    # 提交更改并关闭连接
     conn.commit()
     conn.close()
 
@@ -245,11 +271,23 @@ def spider(start_url, max_pages):
             # 提取网页正文内容
             body_text = " ".join(tree.xpath('//body//text()[not(parent::script) and not(parent::style)]'))
 
-            # 分词并移除停用词
+            # 单词统计：先经过 tokenize_and_filter（移除停用词）
             words = tokenize_and_filter(body_text, stopwords)
+            single_counter = Counter(words)
 
-            # 统计词频并更新到 body_keywords
-            current_page.body_keywords = dict(Counter(words))
+            # 提取原始单词列表（不过滤），用于短语提取
+            raw_words = re.findall(r'\b\w+\b', body_text.lower())
+            phrase_counter = Counter()
+            for n in range(2, 6):  # 组合连续2到5个单词为短语
+                for i in range(len(raw_words) - n + 1):
+                    phrase = " ".join(raw_words[i:i+n])
+                    phrase_counter[phrase] += 1
+
+            # 合并单词和短语的统计结果
+            combined_counter = single_counter + phrase_counter
+
+            # 更新到当前页面的 body_keywords
+            current_page.body_keywords = dict(combined_counter)
 
             # 更新网页标题
             title = tree.xpath('//title/text()')

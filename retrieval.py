@@ -3,22 +3,32 @@ import re
 import math
 from collections import defaultdict, Counter
 from nltk.stem import PorterStemmer
+from datetime import datetime, timezone, timedelta
+import os
+from spider import read_database as spider_read_database, load_stopwords, from_base64
+from indexer import indexer, check_database
 
 # 加载倒排索引数据
-def load_database(db_file):
+def read_database(db_file):
     conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
     cursor.execute("SELECT keyword, postings FROM inverted_index")
     index = defaultdict(list)
     rows = cursor.fetchall()
     for keyword, postings_str in rows:
+        # 解码关键字
+        decoded_keyword = from_base64(keyword)
         postings = []
         if postings_str:
             for item in postings_str.split(","):
                 parts = item.split(":")
+                # parts[0]、parts[1]、parts[2] 均为 base64 编码的字符串
                 if len(parts) == 3:
-                    postings.append({"url": parts[0], "tf": float(parts[1]), "tf-idf": float(parts[2])})
-        index[keyword] = postings
+                    decoded_url = from_base64(parts[0])
+                    decoded_tf = float(from_base64(parts[1]))
+                    decoded_tfidf = float(from_base64(parts[2]))
+                    postings.append({"url": decoded_url, "tf": decoded_tf, "tf-idf": decoded_tfidf})
+        index[decoded_keyword] = postings
     conn.close()
     return index
 
@@ -54,21 +64,48 @@ def merge_doc_vectors(body_vectors, title_vectors, title_boost=2.0):
     return merged
 
 # 解析查询：提取双引号中的短语以及剩余的单个查询词
-def parse_query(query, stemmer):
-    # 提取短语（双引号内内容）
-    phrases = re.findall(r'"([^"]+)"', query)
-    # 去除短语部分后的剩余查询
-    remaining = re.sub(r'"[^"]+"', "", query)
-    # 提取单个单词（忽略标点）
-    words = re.findall(r'\w+', remaining.lower())
-    # 词干化单个查询词
-    query_terms = [stemmer.stem(word) for word in words]
-    # 对每个短语进行分词并词干化
+def parse_query(query, stemmer, stopwords):
+    """
+    解析查询字符串，提取由双引号括起来的短语与剩余的普通查询词。
+    - 对普通查询部分先移除停用词，再进行词干化；
+    - 对由双引号括起来的短语不移除停用词，直接返回原始短语，再进行词干化生成词列表。
+    返回格式：(query_terms, query_phrases)
+      - query_terms: 列表，每个元素已词干化的普通查询词（已过滤停用词）
+      - query_phrases: 列表，每个元素为短语对应的词干化列表（短语内部未移除停用词）
+    """
+    query = query.lower()
+    tokens = []   # 保存非短语部分的文本，且过滤停用词
+    phrases = []  # 保存提取到的原始短语（不移除停用词）
+    i = 0
+    n = len(query)
+    while i < n:
+        if query[i] == '"':
+            # 遇到引号，则提取引号内的内容作为短语，不进行停用词过滤
+            j = query.find('"', i+1)
+            if j == -1:
+                break  # 没有闭合直接退出
+            phrase = query[i+1:j].strip()
+            if phrase:
+                phrases.append(phrase)
+            i = j + 1
+        else:
+            # 非引号部分：提取单词并过滤停用词
+            j = query.find('"', i)
+            if j == -1:
+                part = query[i:]
+                i = n
+            else:
+                part = query[i:j]
+                i = j
+            tokens.extend([token for token in re.findall(r'\w+', part.lower()) if token not in stopwords])
+    # 对普通查询词进行词干化
+    query_terms = [stemmer.stem(token) for token in tokens if token]
+    # 对短语部分：仅进行词干化，不过滤停用词
     query_phrases = []
     for phrase in phrases:
-        tokens = re.findall(r'\w+', phrase.lower())
-        if tokens:
-            query_phrases.append([stemmer.stem(token) for token in tokens])
+        phrase_tokens = re.findall(r'\w+', phrase.lower())
+        if phrase_tokens:
+            query_phrases.append([stemmer.stem(token) for token in phrase_tokens])
     return query_terms, query_phrases
 
 # 基于查询构造查询向量（权重为 tf * idf，并归一化）
@@ -117,11 +154,18 @@ def phrase_in_title(phrase_tokens, title_vector):
     return all(token in title_vector for token in phrase_tokens)
 
 # 主检索函数：返回按相似度排序的最多 max_results 个文档（格式为 (url, score)）
-def retrieval(query, max_results=50):
+def retrieval(start_url, query, max_pages=300, max_results=50):
     stemmer = PorterStemmer()
-    # 加载两个倒排索引
-    body_index = load_database("body_inverted_index.db")
-    title_index = load_database("title_inverted_index.db")
+    body_index = None
+    title_index = None
+    _, start_page = spider_read_database("webpages.db")
+    # 没有数据库或数据库无效，重新生成索引
+    if (not os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "body_inverted_index.db"))) or (not os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "title_inverted_index.db"))) or (not os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "webpages.db"))) or (datetime.now(timezone.utc) - datetime.fromtimestamp(os.path.getmtime(os.path.join(os.path.dirname(os.path.abspath(__file__)), "body_inverted_index.db")), tz=timezone.utc) > timedelta(days=1)) or (datetime.now(timezone.utc) - datetime.fromtimestamp(os.path.getmtime(os.path.join(os.path.dirname(os.path.abspath(__file__)), "title_inverted_index.db")), tz=timezone.utc) > timedelta(days=1)) or (not check_database("webpages.db", start_url, start_page)):
+        body_index, title_index = indexer(start_url, max_pages)
+    # 数据库有效，加载两个倒排索引
+    else:
+        body_index = read_database("body_inverted_index.db")
+        title_index = read_database("title_inverted_index.db")
     # 构建正文与标题的文档向量
     body_doc_vectors = build_doc_vectors(body_index)
     title_doc_vectors = build_doc_vectors(title_index)
@@ -131,10 +175,37 @@ def retrieval(query, max_results=50):
     all_docs = set(body_doc_vectors.keys()) | set(title_doc_vectors.keys())
     total_docs = len(all_docs) if all_docs else 1
 
-    # 解析查询，得到单词与短语（其中 phrases 为 list[list[str]]）
-    query_terms, query_phrases = parse_query(query, stemmer)
-    # 构造查询向量（用 body_index 和 title_index 计算 df）
-    q_vector = build_query_vector(query_terms, total_docs, [body_index, title_index])
+    # 解析查询，得到普通词和短语（短语为词列表）
+    query_terms, query_phrases = parse_query(query, stemmer, load_stopwords("stopwords.txt"))
+    # 构造带有权重的计数器，普通词权重为 1
+    q_tf = Counter(query_terms)
+    # 对于短语中的每个词，如果在普通词里未出现，则加上权重 0.5
+    for phrase in query_phrases:
+        # 先移除停用词（注意：这里假设停用词是在解析 query_terms 时已去除）
+        phrase_tokens = [token for token in phrase if token not in q_tf]
+        for token in phrase_tokens:
+            q_tf[token] += 0.5
+
+    # 构造 df_dict（文档频率），inverted_indexes 为 [body_index, title_index]
+    df_dict = {}
+    for term in q_tf:
+        docs_with_term = set()
+        for idx in [body_index, title_index]:
+            if term in idx:
+                for p in idx[term]:
+                    docs_with_term.add(p["url"])
+        df_dict[term] = len(docs_with_term)
+
+    # 构造查询向量：权重为 tf * idf
+    q_vector = {}
+    for term, tf in q_tf.items():
+        idf = math.log(total_docs / (1 + df_dict.get(term, 0)))
+        q_vector[term] = tf * idf
+    # 对查询向量归一化
+    norm = math.sqrt(sum(w**2 for w in q_vector.values()))
+    if norm > 0:
+        for term in q_vector:
+            q_vector[term] /= norm
 
     # 计算每个文档的初始相似度得分（余弦相似度）
     scores = {}

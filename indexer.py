@@ -6,18 +6,18 @@ import requests
 from nltk.stem import PorterStemmer
 from collections import Counter, defaultdict
 from math import log
+import re
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from spider import read_database, webpage, spider, load_stopwords, tokenize_and_filter
+from spider import read_database, webpage, spider, load_stopwords, tokenize_and_filter, to_base64
 
 def check_database(database_file, start_url, start_page):
     """
+    检查数据库的有效性
     :param database_file: SQLite 数据库文件名。
     :param start_url: 起始 URL。
-    :param start_url: 起始 webpage。
+    :param start_page: 起始 webpage。
     """
-    # 比对 start_page 与 start_url
     if start_page.url == start_url:
-        # 发送 HEAD 请求获取 start_url 的最后修改时间
         try:
             response = requests.head(start_url, timeout=5)
             response.raise_for_status()
@@ -25,37 +25,47 @@ def check_database(database_file, start_url, start_page):
             if last_modified:
                 start_url_last_modified = datetime.strptime(last_modified, "%a, %d %b %Y %H:%M:%S %Z").replace(tzinfo=timezone.utc)
             else:
-                start_url_last_modified = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+                start_url_last_modified = datetime.now(timezone.utc)
         except Exception:
-            # 如果 HEAD 请求失败，返回True
+            # 如果 HEAD 请求失败，认为数据库有效
             return True
 
-        # 检查 start_url 的最后修改时间是否新于 start_page
-        if start_url_last_modified > start_page.date:
-            # 检查数据库文件的最后修改时间
-            db_last_modified = datetime.fromtimestamp(os.path.getmtime(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file), tz=timezone.utc)
+        # 如果 start_url 的最后修改时间不早于网页中记录的日期
+        if start_url_last_modified >= start_page.date:
+            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), database_file)
+            db_last_modified = datetime.fromtimestamp(os.path.getmtime(db_path), tz=timezone.utc)
             if datetime.now(timezone.utc) - db_last_modified < timedelta(days=1):
-                # 数据库文件有效，返回集合和 start_page
                 return True
             else:
-                # 数据库需要更新，只返回 False 不删除数据库
                 return False
 
-    # 如果条件不满足，删除数据库文件
-    os.remove(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
+    # 如果条件不满足，删除数据库文件后返回 False
+    os.remove(os.path.join(os.path.dirname(os.path.abspath(__file__)), database_file))
     return False
+
+# 定义辅助函数，将 posting 编码成 "url_base64:tf_base64:tf-idf_base64"
+def encode_posting(posting):
+    url_enc = to_base64(posting['url'])
+    tf_enc = to_base64(str(posting['tf']))
+    tfidf_enc = to_base64(f"{posting['tf-idf']:.4f}")
+    return f"{url_enc}:{tf_enc}:{tfidf_enc}"
 
 def save_to_database(database_file, inverted_index):
     """
     将单个倒排索引存入指定的 SQLite 数据库文件。
+    存入时，将 keyword 转换为其 base64 编码，
+    postings 存储格式为：
+    url1_base64:tf1_base64:tf-idf1_base64,url2_base64:tf2_base64:tf-idf2_base64,…
+    
     :param database_file: SQLite 数据库文件名。
-    :param inverted_index: 倒排索引，格式为 {keyword: [{"url": url, "tf": tf, "tf-idf": tf-idf}, ...]}。
+    :param inverted_index: 倒排索引，格式为 
+           {keyword: [{"url": url, "tf": tf, "tf-idf": tf-idf}, ...]}。
     """
-    # 连接到 SQLite 数据库（如果不存在则创建）
-    conn = sqlite3.connect(os.path.dirname(os.path.abspath(__file__)) + "/" + database_file)
+    import os, sqlite3
+    conn = sqlite3.connect(os.path.join(os.path.dirname(os.path.abspath(__file__)), database_file))
     cursor = conn.cursor()
 
-    # 创建表存储倒排索引
+    # 创建存储倒排索引的表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS inverted_index (
             keyword TEXT PRIMARY KEY,
@@ -63,18 +73,16 @@ def save_to_database(database_file, inverted_index):
         )
     ''')
 
-    # 插入倒排索引
     for keyword, postings in inverted_index.items():
-        # 将 postings 转换为字符串格式存储
-        postings_str = ",".join(
-            f"{posting['url']}:{posting['tf']}:{posting['tf-idf']:.4f}" for posting in postings
-        )
+        # 将 keyword 以 base64 编码存储
+        encoded_keyword = to_base64(keyword)
+        # 将每个 posting 转换后，用逗号分隔
+        postings_str = ",".join(encode_posting(posting) for posting in postings)
         cursor.execute('''
             INSERT OR REPLACE INTO inverted_index (keyword, postings)
             VALUES (?, ?)
-        ''', (keyword, postings_str))
+        ''', (encoded_keyword, postings_str))
 
-    # 提交更改并关闭连接
     conn.commit()
     conn.close()
 
@@ -115,14 +123,37 @@ def indexer(start_url, max_pages):
     for page in webpages:
         # 处理正文关键词
         for keyword, tf in page.body_keywords.items():
-            stemmed_keyword = stemmer.stem(keyword)
+            # 如果关键词多于1个单词，则对其中每个单词都进行词干化
+            if " " in keyword:
+                tokens = keyword.split()
+                stemmed_keyword = " ".join(stemmer.stem(token) for token in tokens)
+            else:
+                stemmed_keyword = stemmer.stem(keyword)
             body_inverted_index[stemmed_keyword].append({"url": page.url, "tf": tf})
             body_document_frequencies[stemmed_keyword] += 1
 
         # 处理标题关键词
-        title_words = tokenize_and_filter(page.title, stopwords)  # 分词并移除停用词
-        title_keywords = Counter(stemmer.stem(word) for word in title_words)  # 统计词频并词干化
-        for keyword, tf in title_keywords.items():
+
+        # 1. 单词统计：通过 tokenize_and_filter 获取去除停用词后的单词，并词干化统计
+        title_single_words = tokenize_and_filter(page.title, stopwords)
+        title_single_counter = Counter(stemmer.stem(word) for word in title_single_words)
+
+        # 2. 短语统计：直接从原始标题文本提取单词（不移除停用词），组合连续2到5个词构成短语，并词干化每个短语
+        raw_title_words = re.findall(r'\b\w+\b', page.title.lower())
+        title_phrase_counter = Counter()
+        # 当标题较短时，确保 n 不超过标题单词个数
+        for n in range(2, min(6, len(raw_title_words) + 1)):
+            for i in range(len(raw_title_words) - n + 1):
+                phrase = " ".join(raw_title_words[i:i+n])
+                # 对短语中的每个单词进行词干化
+                stemmed_phrase = " ".join(stemmer.stem(word) for word in phrase.split())
+                title_phrase_counter[stemmed_phrase] += 1
+
+        # 合并单词和短语的统计结果
+        title_combined_counter = title_single_counter + title_phrase_counter
+
+        # 更新标题倒排索引和文档频率统计
+        for keyword, tf in title_combined_counter.items():
             title_inverted_index[keyword].append({"url": page.url, "tf": tf})
             title_document_frequencies[keyword] += 1
 

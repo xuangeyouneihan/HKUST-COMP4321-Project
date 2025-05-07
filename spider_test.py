@@ -26,8 +26,7 @@ print("""
  　　▀██▅▇▀
 """)
 
-# start_url = "https://www.cse.ust.hk/~kwtleung/COMP4321/testpage.htm"
-start_url = "https://comp4321-hkust.github.io/testpages/testpage.htm"
+start_url = "https://www.cse.ust.hk/~kwtleung/COMP4321/testpage.htm"
 max_pages = 30
 
 # 尝试从数据库读取数据
