@@ -1,206 +1,219 @@
-﻿## **Search Engine System Documentation**
+## 香港科技大学 COMP4321 课设（2025春，Group 16）：简单搜索引擎
 
-### **1. Overall Design of the System**
+```
+       　  　▃▆█▇▄▖
+　 　 　 ▟◤▖　　　◥█▎
+   　 ◢◤　 ▐　　　 　▐▉
+　 ▗◤　　　▂　▗▖　　▕█▎
+　◤　▗▅▖◥▄　▀◣　　█▊
+▐　▕▎◥▖◣◤　　　　◢██
+█◣　◥▅█▀　　　　▐██◤
+▐█▙▂　　     　◢██◤
+◥██◣　　　　◢▄◤
+ 　　▀██▅▇▀
+```
+
+[English](README_en.md)
+
+**由于学校是以英文授课的，所以原文档为英文。本文档由 DeepSeek 翻译自英文文档，可能不准**
+
+课设说明与目标详见 [Project_Description_25S.pdf](Project_Description_25S.pdf)。
+
+### **1. 系统整体设计**
+
+本搜索引擎采用模块化设计，包含 4 个“高效”协同的核心组件：
 
-The search engine is a modular system comprising four tightly integrated components designed for efficiency, scalability, and user-centric functionality:
+#### **1.1 网络爬虫（`spider.py`）**
+
+- **广度优先搜索（BFS）遍历**：从用户指定的起始 URL 开始爬取，按配置的最大页面数系统化探索链接
+- **内容提取**：解析 HTML 以获取标题、文本内容、超链接和元数据（如 `Last-Modified` 响应头、页面大小）
+- **动态刷新机制**：通过 HTTP `HEAD` 请求验证页面新鲜度，并与缓存时间戳进行条件检查
+- **持久化存储**：使用 SQLite 将爬取数据存入 `webpages.db`，敏感字段（URL、标题）采用 base64 编码确保特殊字符兼容性
 
-1. #### **Web Crawler (`spider.py`)**
+#### **1.2 索引构建器（`indexer.py`）**
+
+- **倒排索引生成**：
+  - **正文索引**：处理页面正文文本，经过停用词过滤和 Porter 词干提取后生成关键词及短语（2-5 词组合）
+  - **标题索引**：优先处理标题内容并提升权重，采用相同分词流程
+- **TF-IDF加权**：通过词频（TF）和逆文档频率（IDF）计算关键词相关性
+- **数据库优化**：将索引拆分存储为 `body_inverted_index.db` 和 `title_inverted_index.db` 以加速查询
 
-- **Breadth-First Search (BFS) Traversal**: Initiates crawling from a user-specified seed URL, systematically exploring linked pages while adhering to a configurable maximum page limit.
-- **Content Extraction**: Parses HTML to extract titles, text content, hyperlinks, and metadata (e.g. `Last-Modified` headers, page size).
-- **Dynamic Refresh Logic**: Validates page freshness using HTTP `HEAD` requests and conditional checks against cached timestamps.
-- **Persistence Layer**: Stores crawled data in `webpages.db` using SQLite. Sensitive fields (URLs, titles) are base64-encoded to ensure compatibility with special characters.
+#### **1.3 检索功能（`retrieval.py`）**
 
-#### **1.2 Indexer (`indexer.py`)**
+- **查询解析**：支持短语查询（如"Hong Kong"）和标准关键词搜索
+- **向量空间模型**：将文档和查询表示为 TF-IDF 向量，通过余弦相似度计算相关性
+- **分数增强**：对标题匹配应用 2 倍权重，正文短语匹配 1.5 倍，标题短语匹配 3 倍
+- **动态爬取**：按需获取未缓存页面以确保结果时效性
 
-- **Inverted Index Construction**: Generates two indices:
-  - **Body Index**: Processes page body text, tokenizing keywords and phrases (2–5 words) after stop word removal and Porter stemming.
-  - **Title Index**: Prioritizes title content with boosted weights, applying the same tokenization pipeline.
-- **TF-IDF Weighting**: Computes term frequency (TF) and inverse document frequency (IDF) to rank keyword relevance.
-- **Database Optimization**: Splits indices into `body\_inverted\_index.db` and `title\_inverted\_index.db` to accelerate query processing.
+#### **1.4 网页界面（`webui.py`）**
 
-#### **1.3 Retrieval Function (`retrieval.py`)**
+- **Flask 框架界面**：提供极简风格的实时搜索界面
+- **输入净化**：自动过滤非 ASCII 字符并将智能引号转换为标准形式
+- **可视化增强**：高亮已访问链接，显示关键词摘要，格式化展示元数据（如页面大小、最后修改时间）
 
-- **Query Parsing**: Supports phrase queries (e.g. "Hong Kong") and standard keyword searches.
-- **Vector Space Model**: Represents documents and queries as TF-IDF vectors, calculating relevance via cosine similarity.
-- **Score Boosting**: Applies multipliers for title matches (2×) and phrase occurrences (1.5× for body, 2× for titles).
-- **Dynamic Crawling**: Fetches uncached pages on demand to ensure up-to-date results.
+### **2. 索引数据库文件结构**
 
-#### **1.4 Web Interface (`webui.py`)**
+#### **2.1 `webpages.db` 结构**
 
-- **Flask-Based UI**: Renders a minimalist interface with real-time search capabilities.
-- **Input Sanitization**: Automatically filters non-ASCII characters and converts smart quotes to standard equivalents.
-- **Visual Enhancements**: Highlights visited links, displays keyword summaries, and formats results with metadata (e.g. page size, last-modified dates).
+- **数据表**：**`webpages`**
+  - `url` (Base64)：主键，确保 URL 唯一性和安全存储
+  - `title` (Base64)：处理多语言文本的页面标题
+  - `date` (Base64)：符合 ISO 标准的最后修改时间戳
+  - `size` (Base64)：页面字节大小
+  - `body_keywords`：序列化的 `{关键词:频率}` 字典，所有字段均采用 base64 编码
+  - `parent_links`/`child_links`：base64 编码的 URL 逗号分隔列表
+  - `is_start` (Base64)：标识起始 URL 的标志位（`0`/`1`）
 
-### **2. File Structures in the Index Database**
+#### **2.2 倒排索引数据库**
 
-#### **2.1 `webpages.db` Schema**
+- **正文索引（`body_inverted_index.db`）**
+  - **数据表**：**`inverted_index`**
+    - `keyword` (Base64)：词干化后的词项或短语（如"machine learn"对应"machine learning"）
+    - `postings` (Text)：编码后的"`url`:`tf`:`tfidf`"条目，其中：
+      - `url`：base64 编码的文档 URL
+      - `tf`：base64 编码的词项在文档中的频率
+      - `tfidf`：base64 编码的 TF-IDF 分数（保留四位小数）
+- **标题索引（`title_inverted_index.db`）**
+  - 结构与正文索引相同，但词项提取自页面标题
 
-- **Table**: **`webpages`**
-  - `url` (Base64): Primary key; ensures URL uniqueness and safe storage.
-  - `title` (Base64): Page title encoded to handle multilingual text.
-  - `date` (Base64): ISO-formatted timestamp of the last page modification.
-  - `size` (Base64): Page size in bytes.
-  - `body_keywords`: Serialized dictionary of `{keyword:frequency}` pairs, where keyword and frequency are all base64.
-  - `parent_links`/`child_links`: Comma-separated lists of base64-encoded URLs.
-  - `is_start` (Base64): Flag (`0`/`1`) indicating whether the URL is the seed.
+### **3. 核心算法**
 
-#### **2.2 Inverted Index Databases**
+#### **3.1 带条件刷新的 BFS 爬取**
 
-- **Body Index (`body_inverted_index.db`)**
-  - **Table**: **`inverted_index`**
-    - `keyword` (Base64): Stemmed term or phrase (e.g. `"machine learn"` for "machine learning").
-    - `postings` (Text): Encoded list of “url:tf:tfidf” entries, where:
-      - `url`: Base64-encoded document URL.
-      - `tf`: Base64-encoded term frequency in the document.
-      - `tfidf`: Base64-encoded TF-IDF score rounded to 4 decimal places.
-- **Title Index (`title_inverted_index.db`)**
-  - Identical structure to the body index but with terms extracted from page titles.
+- **队列管理**：使用 `deque` 实现未访问URL的先进先出处理
+- **页面更新检测**：
+  1. 发送 `HEAD` 请求检查 `Last-Modified` 响应头
+  2. 与缓存时间戳比对，重新爬取过期页面
+  3. 清理无有效父链接的孤儿页面
 
-### **3. Key Algorithms**
+#### **3.2 分词与词干提取流程**
 
-#### **3.1 BFS Crawling with Conditional Refresh**
+- **停用词过滤**：使用预定义列表（`stopwords.txt`）过滤常见虚词（如"the"、"and"）
+- **短语提取**：从原始文本识别2-5词序列（如"search engine optimization"）
+- **Porter词干提取**：将词语还原为词根形式（如"running"→"run"）以统一索引
 
-- **Queue Management**: Uses a `deque` to manage unvisited URLs, ensuring FIFO processing.
-- **Page Update Detection**:
+#### **3.3 TF-IDF 计算**
 
-1. Sends `HEAD` requests to check `Last-Modified` headers.
-1. Compares timestamps with cached values; re-crawls stale pages.
-1. Prunes orphaned pages (those with no active parent links).
+- **词频（TF）**：
+  `tf=(关键词在文档中的出现次数)`
+  
+- **逆文档频率（IDF）**：
+  `idf=log(总文档数/(1+包含关键词的文档数))`
+  
+- **TF-IDF 权重**：
+  `tfidf=tf×idf`，按文档内最大 `tf` 值归一化
 
-#### **3.2 Tokenization and Stemming Pipeline**
+#### **3.4 查询处理与排序**
 
-- **Stopword Removal**: Filters common words (e.g. "the", "and") using a predefined list (`stopwords.txt`)
-- **Phrase Extraction**: Identifies 2–5-word sequences from raw text (e.g. "search engine optimization").
-- **Porter Stemming**: Reduces words to root forms (e.g. "running" → "run") for consistent indexing.
+- **查询向量化**：
+  - 对查询词进行分词和词干提取
+  - 基于两个索引的文档频率计算 TF-IDF 权重
+  
+- **余弦相似度**：
+  `相似度=(文档向量∙查询向量)/(‖文档向量‖×‖查询向量‖)`
+  
+- **分数调整**：
+  - 标题匹配：`分数 *= 2`
+  - 正文短语匹配：`分数 *= 1.5`
+  - 标题短语匹配：`分数 *= 3`
 
-#### **3.3 TF-IDF Calculation**
+### **4. 安装与部署**
 
-- **Term Frequency (TF)**:
+#### **4.1 先决条件**
 
-  `tf=(Number of keyword occurrences in document)`
+- **Python 3.13**：需支持异步特性和库兼容性
+- **依赖项**：
+  - Windows：`pip install -r requirements.txt`
+  - Arch Linux：`sudo pacman -S python python-requests python-lxml nltk-data python-nltk python-flask`
 
-- **Inverse Document Frequency (IDF)**:
+#### **4.2 执行步骤**
 
-  `idf=log(Total documents(1+Number of documents containing the keyword))`
+- **启动服务**：`python webui.py`
+- **访问界面**：浏览器打开<http://localhost:11451>
+- **注意**：首次查询可能较慢，因搜索引擎在首次查询时才开始爬取页面
 
-- **TF-IDF Weight**:
+#### **4.3 自定义配置**
 
-  `tfidf=tf×idf, normalized by the maximum tf in the document`
+- **调整爬取限制**：通过界面修改"Max Crawled Page"控制资源使用
+- **调整结果数量**：通过界面修改"Max Results"优化显示
+- **更新停用词**：编辑 `stopwords.txt` 添加领域相关噪声词
 
-#### **3.4 Query Processing and Ranking**
+### **5. 超越要求的进阶功能**
 
-- **Query Vectorization**:
+#### **5.1 短语查询支持**
 
-  - Tokenizes and stems query terms.
-  - Computes TF-IDF weights using document frequencies from both indices.
+- 用户可使用引号包裹多词短语（如"deep learning"）进行精确匹配
+- 引擎优先返回标题或正文包含这些短语的文档
 
-- **Cosine Similarity**:
+#### **5.2 动态链接可视化**
 
-  `similarity=(doc_vector∙query_vector)(doc_vector×query_vector)`
+- 搜索结果以超链接形式展示父子链接，支持用户浏览爬取图谱
 
-- **Score Adjustment**:
-  - Title matches: `score *= 2`
-  - Body phrase matches: `score *= 1.5`
-  - Title phrase matches: `score *= 3`
+#### **5.3 关键词摘要**
 
-### **4. Installation and Deployment**
+- 每个结果展示"关键词"字段，列出前5个词干化术语及其频率（如“algorithm 12; data 9; ...”）
 
-#### **4.1 Prerequisites**
+#### **5.4 输入净化与兼容**
 
-- **Python 3.13**: Required for async features and library compatibility.
-- **Dependencies**:
-  - Windows: `pip install -r requirements.txt`
-  - Arch Linux: `sudo pacman -S python python-requests python-lxml nltk-data python-nltk python-flask`
+- 自动转换非 ASCII 字符和智能引号为标准形式
+- 自动补全缺失的 URL 协议头（如为 `example.com` 添加 `http://`）
 
-#### **4.2 Execution**
+#### **5.5 会话级链接追踪**
 
-- **Start the Server**: `python webui.py`
-- **Access the UI**: Navigate to <http://localhost:11451> in a browser
-- **Note: It may be very slow on the first query. This is normal, because our search engine starts to crawl the web pages on the first query, not on start.**
+- 通过 `sessionStorage` 在客户端存储已访问链接，会话期间以紫色高亮显示
 
-#### **4.3 Customization**
+### **6. 测试与验证**
 
-- **Adjust Crawling Limits**: Modify “Max Crawled Page” in the UI to control resource usage.
-- **Adjust Result Limits**: Modify “Max Results” in the UI to control resource usage.
-- **Update Stopwords**: Edit `stopwords.txt` to include domain-specific noise words.
+提交不含非 ASCII 字符的查询（如"Café"）
 
-### **5. Advanced Features Beyond Requirements**
+- **预期**：返回有效结果
+- **结果**：通过验证
 
-#### **5.1 Phrase Query Support**
+### **7. 系统评估**
 
-- Users can enclose multi-word phrases in quotes (e.g. "deep learning") for exact matches.
-- The engine prioritizes documents containing these phrases in titles or body text.
+#### **7.1 优势**
 
-#### **5.2 Dynamic Link Visualization**
+- **模块化设计**：组件解耦，支持独立升级（如替换为分布式爬虫）
+- **高效性**：SQLite 索引和内存向量运算确保中小规模语料的亚秒级响应
+- **鲁棒性**：“优雅”处理畸形 HTML、编码错误和网络超时
 
-- Search results display parent/child links as hyperlinks, enabling users to navigate the crawled graph.
+#### **7.2 局限**
 
-#### **5.3 Keyword Summarization**
+- **可扩展性**：内存向量计算在文档数超 1 万时效率显著下降
+- **语言支持**：因硬编码停用词和词干规则，目前仅支持英文
+- **并发能力**：单线程爬取/索引限制多核系统性能
 
-- Each result shows a “Keywords” field listing the top 5 stemmed terms and their frequencies (e.g. algorithm 12; data 9; ...).
+#### **7.3 设计权衡**
 
-#### **5.4 Input Sanitization and Compatibility**
+- **简洁性 vs 性能**：选择 SQLite 而非 Elasticsearch/PostgreSQL 降低部署复杂度，牺牲水平扩展能力
+- **准确性 vs 速度**：优先精确短语匹配而非模糊搜索，虽提升查询延迟但保证精度
 
-- Automatically converts non-ASCII characters and smart quotes to standard equivalents.
-- Validates URLs to handle typos (e.g. prepending `http://` if missing).
+#### **7.4 未来改进**
 
-#### **5.5 Session-Based Link Tracking**
+- **分布式架构**：采用 Apache Spark 或 Scrapy 实现大规模爬取/索引
+- **相关性优化**：集成 PageRank 或基于 BERT 的语义相似度计算
+- **多语言支持**：增加语言检测和本地化分词
 
-- Visited links are highlighted in purple during a session, stored client-side via `sessionStorage`.
+#### **7.5 功能规划**
 
-### **6. Testing and Validation**
+- **自动补全**：基于 Trie 树实现前缀匹配建议
+- **摘要生成**：展示关键词上下文片段
+- **用户反馈机制**：通过"结果是否有帮助？"投票改进排序
 
-Submit a query without non-ASCII characters (e.g. “Café”)
+### **8. 贡献占比及说明**
 
-- **Expected**: Valid results returned.
-- **Result**: Passed.
+- **于英轩** ([xuangeyouneihan](https://github.com/xuangeyouneihan)，本人)：
 
-### **7. System Evaluation**
+	75%，完成项目全部代码开发及第一阶段后所有文档撰写。
 
-#### **7.1 Strengths**
+- **杜茂森** ([ThisIsNotCodingJellyfish](https://github.com/ThisIsNotCodingJellyfish))：
 
-- **Modularity**: Components are decoupled, enabling independent updates (e.g. replacing the crawler with a distributed alternative).
-- **Efficiency**: SQLite indexing and in-memory vector operations ensure sub-second response times for small-to-medium corpora.
-- **Robustness**: Gracefully handles malformed HTML, encoding errors, and network timeouts.
+	24%，负责第一阶段前文档撰写，后续退出课程学习。
 
-#### **7.2 Weaknesses**
+- **Wu Lixin（不清楚中文名）**：
 
-- **Scalability**: In-memory vector calculations become impractical for corpora exceeding 10,000 documents.
-- **Language Support**: Limited to English due to hardcoded stopwords and stemming rules.
-- **Concurrency**: Single-threaded crawling/indexing limits performance on multi-core systems.
+	1%，申请了课程延迟退出，前期为本人和杜茂森提供部分思路。
 
-#### **7.3 Design Trade-Offs**
+- **Lin Xuanyu（不清楚中文名）**：
 
-- **Simplicity vs. Performance**: Chose SQLite over Elasticsearch/PostgreSQL to reduce setup complexity, sacrificing horizontal scalability.
-- **Accuracy vs. Speed**: Prioritized exact phrase matching over fuzzy search to maintain precision, increasing query latency.
-
-#### **7.4 Future Improvements**
-
-- **Distributed Architecture**: Implement Apache Spark or Scrapy for large-scale crawling/indexing.
-- **Relevance Tuning**: Integrate PageRank or BERT-based embeddings for semantic similarity.
-- **Multilingual Support**: Add language detection and locale-specific tokenization.
-
-#### **7.5 Feature Roadmap**
-
-- **Autocomplete**: Suggest queries using Trie-based prefix matching.
-- **Snippet Generation**: Display contextual text around keyword hits.
-- **User Feedback Loop**: Allow votes to improve ranking (e.g. “Was this result helpful?”).
-
-### **8. Contribution**
-
-- YU, Yingxuan ([xuangeyouneihan](https://github.com/xuangeyouneihan), me):
-
-75%. I wrote almost all the code in the project and wrote all the documentation after Phase 1.
-
-- DU, Maosen ([ThisIsNotCodingJellyfish](https://github.com/ThisIsNotCodingJellyfish)):
-
-24%. He wrote the documentation before Phase 1 submission, but he left from study after that.
-
-- WU, Lixin:
-
-1%. He applied late drop for this course, and gave DU, Maosen and me some ideas.
-
-- LIN, Xuanyu:
-
-0%. He did not even contact us three.
+	0%，全程未与团队成员联系。

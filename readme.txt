@@ -1,1 +1,0 @@
-﻿See "4. Installation and Deployment" of README.md
