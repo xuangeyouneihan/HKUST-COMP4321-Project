@@ -50,7 +50,7 @@ def from_base64(b64_str):
 def read_database(database_file):
     """
     读取 webpages.db 并返回网页集合和 is_start 为 1 的页面，
-    数据库中的每一项均为 base64 编码，读取后进行解码。
+    数据库中的每一项均为 base64 编码（单个字段直接编码，join后的字段不整体编码），读取后进行解码。
     :param database_file: SQLite 数据库文件名。
     :return: (webpage 集合, start_page) 或 (None, None)
     """
@@ -67,15 +67,33 @@ def read_database(database_file):
         webpages = set()
         start_page = None
         for row in rows:
-            # 解码每个字段
             try:
                 url = from_base64(row[0])
                 title = from_base64(row[1])
                 date_str = from_base64(row[2])
                 size_str = from_base64(row[3])
-                body_keywords_str = from_base64(row[4]) if row[4] else ""
-                parent_links_str = from_base64(row[5]) if row[5] else ""
-                child_links_str = from_base64(row[6]) if row[6] else ""
+                # body_keywords 字段：存储的是每个项 key:value 都分别 Base64 编码后用 ":" 分隔，再用逗号连接
+                body_keywords_str = row[4] if row[4] else ""
+                body_keywords = {}
+                if body_keywords_str:
+                    for item in body_keywords_str.split(","):
+                        parts = item.split(":")
+                        if len(parts) == 2:
+                            key = from_base64(parts[0])
+                            try:
+                                value = int(from_base64(parts[1]))
+                            except:
+                                value = 0
+                            body_keywords[key] = value
+
+                # parent_links 字段：每个链接已单独 Base64 编码，用逗号分隔
+                parent_links_str = row[5] if row[5] else ""
+                parent_links = set(from_base64(link) for link in parent_links_str.split(",")) if parent_links_str else set()
+
+                # child_links 字段：同理，按逗号分隔后逐个解码
+                child_links_str = row[6] if row[6] else ""
+                child_links = set(from_base64(link) for link in child_links_str.split(",")) if child_links_str else set()
+
                 is_start_str = from_base64(row[7]) if row[7] else "0"
             except Exception:
                 continue
@@ -85,21 +103,6 @@ def read_database(database_file):
                 size = int(size_str)
             except:
                 size = 0
-
-            body_keywords = {}
-            if body_keywords_str:
-                for item in body_keywords_str.split(","):
-                    parts = item.split(":")
-                    if len(parts) == 2:
-                        key = parts[0]
-                        try:
-                            value = int(parts[1])
-                        except:
-                            value = 0
-                        body_keywords[key] = value
-
-            parent_links = set(parent_links_str.split(",")) if parent_links_str else set()
-            child_links = set(child_links_str.split(",")) if child_links_str else set()
 
             page = webpage(
                 url=url,
@@ -151,9 +154,9 @@ def save_to_database(database_file, visited, start_url):
     ''')
 
     for page in visited:
-        parent_links_str = ",".join(page.parent_links)
-        child_links_str = ",".join(page.child_links)
-        body_keywords_str = ",".join(f"{key}:{value}" for key, value in page.body_keywords.items())
+        parent_links_b64 = ",".join(to_base64(link) for link in page.parent_links)
+        child_links_b64 = ",".join(to_base64(link) for link in page.child_links)
+        body_keywords_b64 = ",".join(f"{to_base64(key)}:{to_base64(str(value))}" for key, value in page.body_keywords.items())
         is_start = "1" if page.url == start_url else "0"
 
         # 将所有数据转换为字符串，然后分别 Base64 编码
@@ -161,9 +164,6 @@ def save_to_database(database_file, visited, start_url):
         title_b64 = to_base64(page.title)
         date_b64 = to_base64(page.date.isoformat())
         size_b64 = to_base64(str(page.size))
-        body_keywords_b64 = to_base64(body_keywords_str)
-        parent_links_b64 = to_base64(parent_links_str)
-        child_links_b64 = to_base64(child_links_str)
         is_start_b64 = to_base64(is_start)
 
         cursor.execute('''

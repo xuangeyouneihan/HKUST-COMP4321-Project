@@ -220,7 +220,7 @@ def retrieval(start_url, query, max_pages=300, max_results=50):
             boost = 1.0
             # 检查标题中匹配（利用 title_doc_vectors 中的信息）
             if url in title_doc_vectors and phrase_in_title(phrase_tokens, title_doc_vectors[url]):
-                boost = 2.0
+                boost = 3.0
             # 否则检查正文匹配
             elif url in body_doc_vectors and phrase_in_doc(phrase_tokens, body_doc_vectors[url]):
                 boost = 1.5

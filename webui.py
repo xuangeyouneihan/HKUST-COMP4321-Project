@@ -16,7 +16,7 @@ html_template = """
 <!DOCTYPE html>
 <head>
     <meta charset="utf-8">
-    <title>Simple Search Engine</title>
+    <title>{% if query %}{{ query }} - {% endif %}Simple Search Engine</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <script>
     // 将弯引号转换成傻瓜引号，并移除非ASCII字符
