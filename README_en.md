@@ -224,3 +224,15 @@ Submit a query without non-ASCII characters (e.g. “Café”)
 - LIN, Xuanyu:
 
 ​	0%. He did not even contact us three.
+
+### **9. Open-Source Projects Used**
+
+- [Python](https://www.python.org): PSFLv2 license
+
+- [Requests](https://requests.readthedocs.io/en/latest): Apache-2.0 license
+
+- [lxml](https://lxml.de): BSD-3-Clause license
+
+- [NLTK](https://www.nltk.org): Apache-2.0 license
+
+- [Flask](https://flask.palletsprojects.com/en/stable): Apache-2.0 license

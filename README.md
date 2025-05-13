@@ -217,3 +217,15 @@
 - **Lin Xuanyu（不清楚中文名）**：
 
 	0%，全程未与团队成员联系。
+
+### **9. 使用的开源项目**
+
+- [Python](https://www.python.org): PSFLv2 license
+
+- [Requests](https://requests.readthedocs.io/en/latest): Apache-2.0 license
+
+- [lxml](https://lxml.de): BSD-3-Clause license
+
+- [NLTK](https://www.nltk.org): Apache-2.0 license
+
+- [Flask](https://flask.palletsprojects.com/en/stable): Apache-2.0 license
